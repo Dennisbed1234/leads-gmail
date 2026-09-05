@@ -184,8 +184,6 @@ export default function SecScanner() {
             { name: 'Amazon', cik: '0001018724' },
             { name: 'Google', cik: '0001652044' },
             { name: 'Tesla', cik: '0001318605' },
-            { name: 'Netflix', cik: '0001065280' },
-            { name: 'Meta', cik: '0001326801' },
           ].map(({ name, cik }) => (
             <button
               key={cik}
