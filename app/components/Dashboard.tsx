@@ -36,7 +36,6 @@ export default function Dashboard() {
     <div className="p-6 max-w-6xl mx-auto">
       <h2 className="text-2xl font-bold mb-6">📊 Dashboard</h2>
       
-      {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded-xl shadow">
           <div className="text-3xl font-bold text-blue-600">{stats.totalLeads}</div>
@@ -58,7 +57,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Sources */}
       <div className="grid grid-cols-2 gap-6">
         <div className="bg-white p-4 rounded-xl shadow">
           <h3 className="font-semibold mb-3">Lead Sources</h3>
@@ -70,7 +68,6 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Statuses */}
         <div className="bg-white p-4 rounded-xl shadow">
           <h3 className="font-semibold mb-3">Lead Status</h3>
           {stats.statuses.map((status) => (
