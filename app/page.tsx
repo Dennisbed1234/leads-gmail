@@ -1,4 +1,3 @@
-// app/page.tsx (simplified)
 'use client';
 
 import SecScanner from '@/components/SecScanner';
