@@ -8,6 +8,7 @@ export default function SecScanner() {
   const [leads, setLeads] = useState<any[]>([]);
   const [error, setError] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [stats, setStats] = useState<any>(null);
 
   const handleScan = async () => {
     if (!cik) {
@@ -18,6 +19,7 @@ export default function SecScanner() {
     setLoading(true);
     setError('');
     setLeads([]);
+    setStats(null);
 
     try {
       const response = await fetch('/api/sec/extract', {
@@ -34,6 +36,12 @@ export default function SecScanner() {
       const data = await response.json();
       setLeads(data.leads || []);
       setCompanyName(data.company);
+      setStats({
+        totalExtracted: data.totalExtracted,
+        gmailsGenerated: data.gmailsGenerated,
+        validGmails: data.validGmails,
+        validityRate: data.verificationStats?.validityRate || 0
+      });
       
       if (data.leads.length === 0) {
         setError('No valid Gmail addresses found for executives');
@@ -73,6 +81,27 @@ export default function SecScanner() {
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
             {error}
+          </div>
+        )}
+
+        {stats && (
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600">{stats.totalExtracted}</div>
+              <div className="text-sm text-blue-700">Executives Found</div>
+            </div>
+            <div className="p-3 bg-purple-50 rounded-lg">
+              <div className="text-2xl font-bold text-purple-600">{stats.gmailsGenerated}</div>
+              <div className="text-sm text-purple-700">Gmails Generated</div>
+            </div>
+            <div className="p-3 bg-green-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">{stats.validGmails}</div>
+              <div className="text-sm text-green-700">Valid Gmails</div>
+            </div>
+            <div className="p-3 bg-yellow-50 rounded-lg">
+              <div className="text-2xl font-bold text-yellow-600">{stats.validityRate.toFixed(1)}%</div>
+              <div className="text-sm text-yellow-700">Validity Rate</div>
+            </div>
           </div>
         )}
 
@@ -154,14 +183,16 @@ export default function SecScanner() {
             { name: 'Microsoft', cik: '0000789019' },
             { name: 'Amazon', cik: '0001018724' },
             { name: 'Google', cik: '0001652044' },
-            { name: 'Tesla', cik: '0001318605' }
+            { name: 'Tesla', cik: '0001318605' },
+            { name: 'Netflix', cik: '0001065280' },
+            { name: 'Meta', cik: '0001326801' },
           ].map(({ name, cik }) => (
             <button
               key={cik}
               onClick={() => setCik(cik)}
               className="px-3 py-1 text-xs bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
             >
-              {name} ({cik})
+              {name} ({cik.replace(/^0+/, '')})
             </button>
           ))}
         </div>
