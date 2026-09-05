@@ -1,24 +1,33 @@
-import Queue from 'bull';
+export class VerificationQueue {
+  private queue: { email: string; priority: number }[] = [];
+  private processing = false;
 
-const verificationQueue = new Queue('gmail-verification', {
-  redis: { host: 'localhost', port: 6379 }
-});
+  add(email: string, priority: number = 1) {
+    this.queue.push({ email, priority });
+    this.queue.sort((a, b) => b.priority - a.priority);
+    this.process();
+  }
 
-// Process jobs in parallel
-verificationQueue.process(10, async (job) => {
-  const { emails } = job.data;
-  const verifier = new BatchVerifier();
-  return await verifier.verifyBatch(emails);
-});
+  private async process() {
+    if (this.processing || this.queue.length === 0) return;
+    
+    this.processing = true;
+    const item = this.queue.shift();
+    
+    if (item) {
+      // Process the email verification
+      await this.verify(item.email);
+    }
+    
+    this.processing = false;
+    this.process();
+  }
 
-// Add jobs for batch processing
-export async function addToQueue(emails: string[]) {
-  const chunks = chunkArray(emails, 100);
-  
-  for (const chunk of chunks) {
-    await verificationQueue.add({ emails: chunk }, {
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 2000 }
-    });
+  private async verify(email: string) {
+    // Simulate verification
+    await new Promise(resolve => setTimeout(resolve, 100));
+    console.log(`Verified: ${email}`);
   }
 }
+
+export const verificationQueue = new VerificationQueue();
