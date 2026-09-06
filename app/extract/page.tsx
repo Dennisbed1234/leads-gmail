@@ -1,16 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  Search,
-  Loader2,
-  Download,
-  CheckCircle2,
-  AlertCircle,
-  Building2,
-  Mail,
-  Users,
-} from 'lucide-react';
 
 interface Lead {
   id: string;
@@ -29,9 +19,6 @@ interface Results {
   savedLeads: number;
   company: string;
   leads: Lead[];
-  verificationStats?: {
-    validityRate: number;
-  };
 }
 
 const QUICK_CIKS = [
@@ -81,7 +68,7 @@ export default function ExtractPage() {
 
       if (!data.leads?.length) {
         setError(
-          'Executives found but no valid Gmail candidates were saved. Try another CIK or check logs.'
+          'Executives found but no valid Gmail candidates were saved. Try another CIK.'
         );
       }
     } catch (err) {
@@ -128,8 +115,7 @@ export default function ExtractPage() {
         </p>
       </div>
 
-      {/* Search panel */}
-      <div className="card p-6 mb-6">
+      <div className="card mb-6 p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
           <div className="flex-1">
             <label className="label">CIK Number</label>
@@ -143,31 +129,23 @@ export default function ExtractPage() {
             />
           </div>
           <button
+            type="button"
             onClick={handleExtract}
             disabled={loading}
             className="btn-primary min-w-[140px]"
           >
-            {loading ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Extracting…
-              </>
-            ) : (
-              <>
-                <Search size={16} />
-                Extract
-              </>
-            )}
+            {loading ? 'Extracting…' : 'Extract'}
           </button>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <span className="text-xs text-slate-400 self-center mr-1">Quick:</span>
+          <span className="mr-1 self-center text-xs text-slate-400">Quick:</span>
           {QUICK_CIKS.map((item) => (
             <button
               key={item.cik}
+              type="button"
               onClick={() => setCik(item.cik)}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-primary-300 hover:text-primary-700"
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-indigo-300 hover:text-indigo-700"
             >
               {item.name}
             </button>
@@ -176,40 +154,18 @@ export default function ExtractPage() {
       </div>
 
       {error && (
-        <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <AlertCircle size={18} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </div>
       )}
 
       {results && (
         <>
-          {/* Result stats */}
           <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Stat
-              icon={Users}
-              label="Executives"
-              value={results.totalExtracted}
-              color="text-primary-600 bg-primary-50"
-            />
-            <Stat
-              icon={Mail}
-              label="Gmails generated"
-              value={results.gmailsGenerated}
-              color="text-violet-600 bg-violet-50"
-            />
-            <Stat
-              icon={CheckCircle2}
-              label="Valid Gmails"
-              value={results.validGmails}
-              color="text-emerald-600 bg-emerald-50"
-            />
-            <Stat
-              icon={Building2}
-              label="Saved leads"
-              value={results.savedLeads}
-              color="text-amber-600 bg-amber-50"
-            />
+            <Stat label="Executives" value={results.totalExtracted} />
+            <Stat label="Gmails generated" value={results.gmailsGenerated} />
+            <Stat label="Valid Gmails" value={results.validGmails} />
+            <Stat label="Saved leads" value={results.savedLeads} />
           </div>
 
           {results.leads?.length > 0 && (
@@ -223,8 +179,7 @@ export default function ExtractPage() {
                     {results.leads.length} verified Gmail leads
                   </p>
                 </div>
-                <button onClick={exportCsv} className="btn-secondary">
-                  <Download size={16} />
+                <button type="button" onClick={exportCsv} className="btn-secondary">
                   Export CSV
                 </button>
               </div>
@@ -232,7 +187,7 @@ export default function ExtractPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/80 text-xs font-medium uppercase tracking-wider text-slate-500">
+                    <tr className="border-b border-slate-100 bg-slate-50 text-xs font-medium uppercase tracking-wider text-slate-500">
                       <th className="px-6 py-3">Name</th>
                       <th className="px-6 py-3">Title</th>
                       <th className="px-6 py-3">Email</th>
@@ -246,13 +201,11 @@ export default function ExtractPage() {
                         <td className="px-6 py-3.5 font-medium text-slate-900">
                           {lead.name}
                         </td>
-                        <td className="px-6 py-3.5 text-slate-600">
-                          {lead.title}
-                        </td>
+                        <td className="px-6 py-3.5 text-slate-600">{lead.title}</td>
                         <td className="px-6 py-3.5">
                           <a
                             href={`mailto:${lead.email}`}
-                            className="font-mono text-sm text-primary-600 hover:underline"
+                            className="font-mono text-sm text-indigo-600 hover:underline"
                           >
                             {lead.email}
                           </a>
@@ -277,15 +230,9 @@ export default function ExtractPage() {
 
       {!results && !loading && !error && (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary-50">
-            <Search size={22} className="text-primary-600" />
-          </div>
-          <h3 className="text-sm font-semibold text-slate-900">
-            Ready to extract
-          </h3>
+          <h3 className="text-sm font-semibold text-slate-900">Ready to extract</h3>
           <p className="mt-1 max-w-sm text-sm text-slate-500">
-            Enter a company CIK or pick a quick example above to pull executives
-            and generate Gmail candidates.
+            Enter a company CIK or pick a quick example above.
           </p>
         </div>
       )}
@@ -293,30 +240,11 @@ export default function ExtractPage() {
   );
 }
 
-function Stat({
-  icon: Icon,
-  label,
-  value,
-  color,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: number;
-  color: string;
-}) {
+function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="card p-4">
-      <div className="flex items-center gap-3">
-        <div className={`rounded-lg p-2 ${color}`}>
-          <Icon size={18} />
-        </div>
-        <div>
-          <p className="text-2xl font-semibold tracking-tight text-slate-900">
-            {value}
-          </p>
-          <p className="text-xs text-slate-500">{label}</p>
-        </div>
-      </div>
+      <p className="text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+      <p className="text-xs text-slate-500">{label}</p>
     </div>
   );
 }
