@@ -18,18 +18,22 @@ model Lead {
   industry    String?
   source      String   @default("SEC EDGAR")
   score       Int      @default(50)
-  tags        String[] @default([])
+
+  // SQLite does not support Prisma primitive arrays.
+  // Store tags as a JSON string.
+  tags        String?
+
   notes       String?
   status      String   @default("NEW")
-  
+
   // SEC-specific fields
   cik         String?
   filingDate  String?
   filingType  String?
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   @@index([company])
   @@index([status])
   @@index([source])
@@ -46,12 +50,10 @@ model Company {
   description String?
   address     String?
   website     String?
-  
-  leads       Lead[]
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   @@index([name])
   @@index([ticker])
 }
