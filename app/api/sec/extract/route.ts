@@ -1,17 +1,74 @@
 import { NextResponse } from 'next/server';
 import { secClient } from '@/lib/sec/client';
 import { GmailGenerator } from '@/lib/gmail/generator';
-import { GmailVerifier } from '@/lib/gmail/verifier';
 import { BatchVerifier } from '@/lib/gmail/batch-verifier';
 import { prisma } from '@/lib/db/prisma';
 
+interface Executive {
+  name: string;
+  title: string;
+  company?: string;
+}
+
+function calculateScore(exec: Executive): number {
+  let score = 50;
+
+  const title = exec.title.toLowerCase();
+
+  if (
+    title.includes('ceo') ||
+    title.includes('chief executive') ||
+    title.includes('president')
+  ) {
+    score += 20;
+  }
+
+  if (
+    title.includes('cfo') ||
+    title.includes('chief financial') ||
+    title.includes('coo') ||
+    title.includes('chief operating') ||
+    title.includes('cto') ||
+    title.includes('chief technology') ||
+    title.includes('cio') ||
+    title.includes('chief information') ||
+    title.includes('cmo') ||
+    title.includes('chief marketing')
+  ) {
+    score += 15;
+  }
+
+  if (
+    title.includes('director') ||
+    title.includes('vice president') ||
+    title.includes('vp')
+  ) {
+    score += 10;
+  }
+
+  return Math.min(score, 100);
+}
+
 export async function POST(request: Request) {
   try {
-    const { cik, filingType = '10-K', generateCount = 10 } = await request.json();
+    const {
+      cik,
+      filingType = '10-K',
+      generateCount = 10,
+    } = await request.json();
 
-    // 1. Get executives from SEC
-    const executives = await secClient.extractExecutives(cik, filingType);
-    
+    if (!cik) {
+      return NextResponse.json(
+        { error: 'CIK is required' },
+        { status: 400 }
+      );
+    }
+
+    const executives = await secClient.extractExecutives(
+      cik,
+      filingType
+    );
+
     if (executives.length === 0) {
       return NextResponse.json(
         { error: 'No executives found in filings' },
@@ -19,33 +76,38 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Generate Gmail addresses for each executive
-    const allGmails: { name: string; title: string; emails: string[] }[] = [];
-    
+    const allGmails: {
+      name: string;
+      title: string;
+      emails: string[];
+    }[] = [];
+
     for (const exec of executives.slice(0, generateCount)) {
       const emails = GmailGenerator.getMostLikelyGmails(exec.name);
+
       allGmails.push({
         name: exec.name,
         title: exec.title,
-        emails: emails.slice(0, 10) // Top 10 most likely
+        emails: emails.slice(0, 10),
       });
     }
 
-    // 3. Verify all generated emails
-    const allEmails = allGmails.flatMap(e => e.emails);
+    const allEmails = allGmails.flatMap((e) => e.emails);
+
     const verifier = new BatchVerifier();
+
     const verificationResults = await verifier.verifyBatch(allEmails);
 
-    // 4. Filter to only valid Gmail addresses
-    const validGmails = BatchVerifier.getHighConfidenceEmails(verificationResults.results);
+    const validGmails = BatchVerifier.getHighConfidenceEmails(
+      verificationResults.results
+    );
 
-    // 5. Save to database
     const savedLeads = [];
-    
+
     for (const exec of executives.slice(0, generateCount)) {
-      // Find valid Gmail for this executive
       const execGmails = GmailGenerator.generateGmails(exec.name);
-      const validEmail = validGmails.find(g => 
+
+      const validEmail = validGmails.find((g) =>
         execGmails.includes(g)
       );
 
@@ -59,11 +121,12 @@ export async function POST(request: Request) {
             source: 'SEC EDGAR + Gmail Verification',
             cik: cik,
             filingType: filingType,
-            score: this.calculateScore(exec),
+            score: calculateScore(exec),
             tags: ['Executive', 'C-Suite', 'Gmail', 'Verified'],
-            status: 'NEW'
-          }
+            status: 'NEW',
+          },
         });
+
         savedLeads.push(lead);
       }
     }
@@ -80,12 +143,12 @@ export async function POST(request: Request) {
       verificationStats: {
         validityRate: verificationResults.validityRate,
         totalChecked: verificationResults.totalVerified,
-        totalValid: verificationResults.totalValid
-      }
+        totalValid: verificationResults.totalValid,
+      },
     });
-
   } catch (error) {
     console.error('Error extracting leads:', error);
+
     return NextResponse.json(
       { error: 'Failed to extract leads' },
       { status: 500 }
