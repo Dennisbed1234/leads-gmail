@@ -1,5 +1,3 @@
-export { default as SecScanner } from './SecScanner';
-export { default as LeadTable } from './LeadTable';
-export { default as Dashboard } from './Dashboard';
-export { default as Analytics } from './Analytics';
-export { default as CampaignManager } from './CampaignManager';
+export { default as Sidebar } from './layout/Sidebar';
+export { default as AppShell } from './layout/AppShell';
+export { default as ScoreBadge } from './ScoreBadge';
