@@ -1,6 +1,20 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
+type SourceGroup = {
+  source: string;
+  _count: {
+    _all: number;
+  };
+};
+
+type StatusGroup = {
+  status: string;
+  _count: {
+    _all: number;
+  };
+};
+
 export async function GET() {
   try {
     const [totalLeads, uniqueCompanies, sources, statuses, averageScore] =
@@ -35,17 +49,23 @@ export async function GET() {
         }),
       ]);
 
+    const typedSources = sources as SourceGroup[];
+    const typedStatuses = statuses as StatusGroup[];
+
     return NextResponse.json({
       totalLeads,
       uniqueCompanies: uniqueCompanies.length,
-      sources: sources.map((s) => ({
+
+      sources: typedSources.map((s: SourceGroup) => ({
         name: s.source,
         count: s._count._all,
       })),
-      statuses: statuses.map((s) => ({
+
+      statuses: typedStatuses.map((s: StatusGroup) => ({
         name: s.status,
         count: s._count._all,
       })),
+
       averageScore,
     });
   } catch (error) {
