@@ -10,7 +10,6 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { Loader2, TrendingUp, Users, Building2 } from 'lucide-react';
 
 interface Lead {
   id: string;
@@ -18,7 +17,6 @@ interface Lead {
   company?: string;
   score: number;
   status: string;
-  source?: string;
 }
 
 export default function AnalyticsPage() {
@@ -80,8 +78,7 @@ export default function AnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center gap-2 py-32 text-sm text-slate-500">
-        <Loader2 size={18} className="animate-spin" />
+      <div className="py-32 text-center text-sm text-slate-500">
         Loading analytics…
       </div>
     );
@@ -91,46 +88,21 @@ export default function AnalyticsPage() {
     <div>
       <div className="page-header">
         <h1 className="page-title">Analytics</h1>
-        <p className="page-subtitle">
-          Score distribution and company coverage
-        </p>
+        <p className="page-subtitle">Score distribution and company coverage</p>
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary-50 p-2.5 text-primary-600">
-              <Users size={20} />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">Total leads</p>
-              <p className="text-2xl font-semibold text-slate-900">{leads.length}</p>
-            </div>
-          </div>
+          <p className="text-sm text-slate-500">Total leads</p>
+          <p className="text-2xl font-semibold text-slate-900">{leads.length}</p>
         </div>
         <div className="card p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-emerald-50 p-2.5 text-emerald-600">
-              <TrendingUp size={20} />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">Average score</p>
-              <p className="text-2xl font-semibold text-slate-900">{avgScore}</p>
-            </div>
-          </div>
+          <p className="text-sm text-slate-500">Average score</p>
+          <p className="text-2xl font-semibold text-slate-900">{avgScore}</p>
         </div>
         <div className="card p-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-violet-50 p-2.5 text-violet-600">
-              <Building2 size={20} />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">Companies</p>
-              <p className="text-2xl font-semibold text-slate-900">
-                {uniqueCompanies}
-              </p>
-            </div>
-          </div>
+          <p className="text-sm text-slate-500">Companies</p>
+          <p className="text-2xl font-semibold text-slate-900">{uniqueCompanies}</p>
         </div>
       </div>
 
@@ -155,7 +127,7 @@ export default function AnalyticsPage() {
                       fontSize: 13,
                     }}
                   />
-                  <Bar dataKey="count" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="count" fill="#4f46e5" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -181,7 +153,7 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
                       <div
-                        className="h-full rounded-full bg-primary-500"
+                        className="h-full rounded-full bg-indigo-500"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
