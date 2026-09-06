@@ -138,7 +138,9 @@ export default function CampaignsPage() {
               />
               <p className="mt-1.5 text-xs text-slate-400">
                 One email per line, or separate with commas. Optional format:{' '}
-                <code className="rounded bg-slate-100 px-1">Name <email@domain.com></code>
+                <code className="rounded bg-slate-100 px-1">
+                  {'Name <email@domain.com>'}
+                </code>
               </p>
             </div>
           ) : (
@@ -166,7 +168,11 @@ export default function CampaignsPage() {
               onChange={(e) => setBody(e.target.value)}
             />
             <p className="mt-1.5 text-xs text-slate-400">
-              Tokens: {'{{name}}'} {'{{company}}'} {'{{email}}'} {'{{title}}'}
+              Tokens:{' '}
+              <code className="rounded bg-slate-100 px-1">{'{{name}}'}</code>{' '}
+              <code className="rounded bg-slate-100 px-1">{'{{company}}'}</code>{' '}
+              <code className="rounded bg-slate-100 px-1">{'{{email}}'}</code>{' '}
+              <code className="rounded bg-slate-100 px-1">{'{{title}}'}</code>
             </p>
           </div>
 
@@ -224,19 +230,19 @@ export default function CampaignsPage() {
           <div className="card p-5">
             <h3 className="text-sm font-semibold text-slate-900">How To works</h3>
             <ul className="mt-3 space-y-2 text-sm text-slate-600">
-              <li>• Paste many emails at once</li>
-              <li>• New line or comma separated</li>
-              <li>• Each person gets their own email (not one group To:)</li>
-              <li>• ~2 seconds between sends (Gmail-friendly)</li>
+              <li>Paste many emails at once</li>
+              <li>New line or comma separated</li>
+              <li>Each person gets their own email (not one group To)</li>
+              <li>About 2 seconds between sends (Gmail-friendly)</li>
             </ul>
           </div>
 
           <div className="card p-5">
             <h3 className="text-sm font-semibold text-slate-900">Limits</h3>
             <ul className="mt-3 space-y-2 text-sm text-slate-600">
-              <li>• Max 50 recipients per click</li>
-              <li>• Gmail daily caps apply (~100–500)</li>
-              <li>• Use Preview before real sends</li>
+              <li>Max 50 recipients per click</li>
+              <li>Gmail daily caps apply (about 100 to 500)</li>
+              <li>Use Preview before real sends</li>
             </ul>
           </div>
         </div>
