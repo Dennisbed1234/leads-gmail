@@ -56,11 +56,6 @@ export class SecClient {
     const cleanCik = cik.replace(/\D/g, '');
     const paddedCik = cleanCik.padStart(10, '0');
 
-    /*
-     * Use the SEC submissions endpoint first.
-     * This is much more reliable for finding recent 10-K/10-Q filings
-     * than scraping the archive directory index.
-     */
     const submissionsUrl =
       `${SEC_BASE_URL}/files/submissions/CIK${paddedCik}.json`;
 
@@ -79,7 +74,6 @@ export class SecClient {
       }
 
       const data = await response.json();
-
       const recent = data?.filings?.recent;
 
       if (!recent) {
@@ -99,20 +93,14 @@ export class SecClient {
         i++
       ) {
         const form = forms[i];
-
-        if (!form) {
-          continue;
-        }
-
         const accessionNumber = accessions[i];
-
         const primaryDocument = primaryDocuments[i];
 
         const filingDate =
           filingDates[i] ||
           new Date().toISOString().split('T')[0];
 
-        if (!accessionNumber || !primaryDocument) {
+        if (!form || !accessionNumber || !primaryDocument) {
           continue;
         }
 
@@ -206,10 +194,9 @@ export class SecClient {
 
     const cleanedHtml = this.stripHtml(html);
 
-    const nameMatch =
-      html.match(
-        /<span[^>]*class=["'][^"']*companyName[^"']*["'][^>]*>([\s\S]*?)<\/span>/i
-      );
+    const nameMatch = html.match(
+      /<span[^>]*class=["'][^"']*companyName[^"']*["'][^>]*>([\s\S]*?)<\/span>/i
+    );
 
     if (nameMatch) {
       company.name = this.cleanText(nameMatch[1]);
@@ -289,16 +276,8 @@ export class SecClient {
   ): SecExecutive[] {
     const executives: SecExecutive[] = [];
 
-    /*
-     * SEC filings contain HTML tables, formatting tags,
-     * entities, and irregular whitespace. Convert the document
-     * into cleaner text before searching it.
-     */
     const cleaned = this.normalizeDocument(text);
 
-    /*
-     * Executive titles we are interested in.
-     */
     const titlePattern =
       '(?:' +
       'CEO|' +
@@ -318,33 +297,36 @@ export class SecClient {
       ')';
 
     /*
-     * Pattern 1:
+     * Name, Title
+     *
+     * Example:
      * John Smith, Chief Executive Officer
      */
     const patternOne = new RegExp(
-      '\\b([A-Z][A-Za-z\\-\\']+(?:\\s+[A-Z][A-Za-z\\-\\']+){1,4})\\s*,?\\s+(' +
+      "\\b([A-Z][A-Za-z-']+(?:\\s+[A-Z][A-Za-z-']+){1,4})\\s*,?\\s+(" +
         titlePattern +
         ')\\b',
       'gi'
     );
 
     /*
-     * Pattern 2:
+     * Title Name
+     *
+     * Example:
      * Chief Executive Officer John Smith
      */
     const patternTwo = new RegExp(
       '\\b(' +
         titlePattern +
-        ')\\s+([A-Z][A-Za-z\\-\\']+(?:\\s+[A-Z][A-Za-z\\-\\']+){1,4})\\b',
+        ')\\s+([A-Z][A-Za-z-\\']+(?:\\s+[A-Z][A-Za-z-\\']+){1,4})\\b',
       'gi'
     );
 
     /*
-     * Pattern 3:
-     * Name followed by title separated by lots of whitespace.
+     * Name followed by title with larger whitespace.
      */
     const patternThree = new RegExp(
-      '\\b([A-Z][A-Za-z\\-\\']+(?:\\s+[A-Z][A-Za-z\\-\\']+){1,4})\\s{2,}(' +
+      "\\b([A-Z][A-Za-z-']+(?:\\s+[A-Z][A-Za-z-']+){1,4})\\s{2,}(" +
         titlePattern +
         ')\\b',
       'gi'
@@ -380,9 +362,7 @@ export class SecClient {
     }
 
     /*
-     * Look specifically around common SEC executive sections.
-     * This catches cases where table formatting separates
-     * names and titles.
+     * Search common SEC executive sections.
      */
     const sectionPatterns = [
       /directors?\s+and\s+executive\s+officers?/i,
@@ -406,7 +386,7 @@ export class SecClient {
       );
 
       const sectionRegex = new RegExp(
-        '\\b([A-Z][A-Za-z\\-\\']+(?:\\s+[A-Z][A-Za-z\\-\\']+){1,4})\\s*,?\\s+(' +
+        "\\b([A-Z][A-Za-z-']+(?:\\s+[A-Z][A-Za-z-']+){1,4})\\s*,?\\s+(" +
           titlePattern +
           ')\\b',
         'gi'
@@ -422,9 +402,6 @@ export class SecClient {
       }
     }
 
-    /*
-     * Remove duplicates.
-     */
     const unique = new Map<string, SecExecutive>();
 
     for (const executive of executives) {
@@ -510,13 +487,9 @@ export class SecClient {
       return false;
     }
 
-    /*
-     * Names should contain alphabetic characters,
-     * hyphens or apostrophes.
-     */
     if (
       !nameParts.every((part) =>
-        /^[A-Z][A-Za-z'\-]*$/.test(part)
+        /^[A-Z][A-Za-z'-]*$/.test(part)
       )
     ) {
       return false;
