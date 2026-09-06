@@ -57,9 +57,7 @@ function isGoodEmail(email: string, domain: string): boolean {
   if (SKIP_LOCAL.some((s) => local.includes(s))) return false;
   if (host.includes('example.com')) return false;
   if (host.endsWith('.png') || host.endsWith('.jpg')) return false;
-  // Prefer same-domain emails; allow common public providers lightly scored elsewhere
   if (host === domain || host.endsWith(`.${domain}`)) return true;
-  // Also keep generic public contacts listed on the page
   if (['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com'].includes(host)) {
     return local.length >= 3;
   }
@@ -67,39 +65,42 @@ function isGoodEmail(email: string, domain: string): boolean {
 }
 
 async function fetchText(url: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+
   try {
     const res = await fetch(url, {
       headers: {
         'User-Agent':
           process.env.SEC_USER_AGENT ||
-          'LeadBotPro/1.0 (contact enrichment; +https://example.com)',
+          'LeadBotPro/1.0 (contact enrichment)',
         Accept: 'text/html,application/xhtml+xml',
       },
       redirect: 'follow',
-      signal: AbortSignal.timeout(8000),
+      signal: controller.signal,
     });
     if (!res.ok) return null;
     const ctype = res.headers.get('content-type') || '';
     if (!ctype.includes('text') && !ctype.includes('html')) return null;
     const text = await res.text();
-    return text.slice(0, 500_000); // cap
+    return text.slice(0, 500_000);
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 function extractEmails(html: string): string[] {
-  // mailto: first
-  const mailtos = [...html.matchAll(/mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi)].map(
-    (m) => m[1].toLowerCase()
-  );
+  const mailtos = [
+    ...html.matchAll(
+      /mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi
+    ),
+  ].map((m) => m[1].toLowerCase());
   const plain = html.match(EMAIL_RE) || [];
   return [...new Set([...mailtos, ...plain.map((e) => e.toLowerCase())])];
 }
 
-/**
- * Scan common public pages on a single domain for listed emails.
- */
 export async function extractEmailsFromDomain(
   domainOrUrl: string,
   options?: { maxPages?: number }
