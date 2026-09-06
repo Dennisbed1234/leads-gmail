@@ -8,13 +8,23 @@ type Attachment = {
   contentType?: string;
 };
 
-const DEFAULT_HTML = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#0f0720;color:#f8fafc;border-radius:16px">
-  <div style="height:6px;border-radius:999px;background:linear-gradient(90deg,#f43f5e,#a855f7,#22d3ee);margin-bottom:20px"></div>
-  <h1 style="font-size:22px;margin:0 0 12px">Hi {{name}},</h1>
-  <p style="line-height:1.6;color:#e2e8f0">I came across <strong>{{company}}</strong> and wanted to share a quick idea that could help your team.</p>
-  <p style="line-height:1.6;color:#e2e8f0">Happy to send a short overview if useful.</p>
-  <p style="margin-top:24px;color:#cbd5e1">Best regards</p>
-</div>`;
+const DEFAULT_HTML = [
+  '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#0f0720;color:#f8fafc;border-radius:16px">',
+  '<div style="height:6px;border-radius:999px;background:linear-gradient(90deg,#f43f5e,#a855f7,#22d3ee);margin-bottom:20px"></div>',
+  '<h1 style="font-size:22px;margin:0 0 12px">Hi {{name}},</h1>',
+  '<p style="line-height:1.6;color:#e2e8f0">I came across <strong>{{company}}</strong> and wanted to share a quick idea.</p>',
+  '<p style="line-height:1.6;color:#e2e8f0">Happy to send a short overview if useful.</p>',
+  '<p style="margin-top:24px;color:#cbd5e1">Best regards</p>',
+  '</div>',
+].join('');
+
+function fillPreview(html: string) {
+  return html
+    .split('{{name}}').join('Alex')
+    .split('{{company}}').join('Acme')
+    .split('{{email}}').join('alex@acme.com')
+    .split('{{title}}').join('CEO');
+}
 
 export default function CampaignsPage() {
   const [mode, setMode] = useState<'manual' | 'leads'>('manual');
@@ -45,22 +55,21 @@ export default function CampaignsPage() {
   }, [to]);
 
   const onFiles = async (files: FileList | null) => {
-    if (!files?.length) return;
+    if (!files || !files.length) return;
     const next: Attachment[] = [...attachments];
 
     for (const file of Array.from(files).slice(0, 5 - next.length)) {
       if (file.size > 4 * 1024 * 1024) {
-        setError(`File ${file.name} is over 4MB`);
+        setError('File ' + file.name + ' is over 4MB');
         continue;
       }
       const buf = await file.arrayBuffer();
       const bytes = new Uint8Array(buf);
       let binary = '';
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-      const base64 = btoa(binary);
       next.push({
         filename: file.name,
-        content: base64,
+        content: btoa(binary),
         contentType: file.type || undefined,
       });
     }
@@ -121,18 +130,18 @@ export default function CampaignsPage() {
               : 'border-rose-400/30 bg-rose-500/10 text-rose-100')
         }
       >
-        {!smtp && 'Checking SMTP…'}
+        {!smtp && 'Checking SMTP...'}
         {smtp && !smtp.configured && (
-          <>SMTP not configured. Set SMTP_USER and SMTP_PASS on Vercel.</>
+          <span>SMTP not configured. Set SMTP_USER and SMTP_PASS on Vercel.</span>
         )}
         {smtp?.configured && smtp.verified && (
-          <>
+          <span>
             SMTP connected as <strong>{smtp.user}</strong> — ready to send HTML +
             files.
-          </>
+          </span>
         )}
         {smtp?.configured && !smtp.verified && (
-          <>Verify failed: {smtp.error || 'check App Password / 2FA'}.</>
+          <span>Verify failed: {smtp.error || 'check App Password / 2FA'}.</span>
         )}
       </div>
 
@@ -158,10 +167,7 @@ export default function CampaignsPage() {
           {mode === 'manual' ? (
             <div>
               <label className="label">
-                To{' '}
-                <span className="font-normal text-white/40">
-                  ({parsedCount} address{parsedCount === 1 ? '' : 'es'})
-                </span>
+                To ({parsedCount} addresses)
               </label>
               <textarea
                 className="input min-h-[120px] resize-y font-mono text-sm"
@@ -195,7 +201,7 @@ export default function CampaignsPage() {
               />
               Send as HTML template
             </label>
-            {isHtml && (
+            {isHtml ? (
               <button
                 type="button"
                 className="btn-ghost text-xs"
@@ -203,7 +209,7 @@ export default function CampaignsPage() {
               >
                 Load sample template
               </button>
-            )}
+            ) : null}
           </div>
 
           <div>
@@ -215,42 +221,39 @@ export default function CampaignsPage() {
               onChange={(e) => setBody(e.target.value)}
             />
             <p className="mt-1.5 text-xs text-white/40">
-              Tokens: {'{{name}}'} {'{{company}}'} {'{{email}}'} {'{{title}}'}
+              Tokens: name, company, email, title (wrap with double braces)
             </p>
           </div>
 
-          {isHtml && (
+          {isHtml ? (
             <div>
               <label className="label">Preview</label>
               <div
                 className="overflow-hidden rounded-xl border border-white/10 bg-black/30 p-3"
-                dangerouslySetInnerHTML={{
-                  __html: body
-                    .replace(/\{\{name\}\}/g, 'Alex')
-                    .replace(/\{\{company\}\}/g, 'Acme')
-                    .replace(/\{\{email\}\}/g, 'alex@acme.com')
-                    .replace(/\{\{title\}\}/g, 'CEO'),
-                }}
+                dangerouslySetInnerHTML={{ __html: fillPreview(body) }}
               />
             </div>
-          )}
+          ) : null}
 
           <div>
             <label className="label">Attachments (max 5, 4MB each)</label>
             <input
               type="file"
               multiple
-              className="block w-full text-sm text-white/70 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-sm file:text-white hover:file:bg-white/15"
+              className="block w-full text-sm text-white/70"
               onChange={(e) => onFiles(e.target.files)}
             />
-            {attachments.length > 0 && (
+            {attachments.length > 0 ? (
               <ul className="mt-2 space-y-1 text-xs text-white/60">
                 {attachments.map((a) => (
-                  <li key={a.filename} className="flex items-center justify-between gap-2">
+                  <li
+                    key={a.filename}
+                    className="flex items-center justify-between gap-2"
+                  >
                     <span>{a.filename}</span>
                     <button
                       type="button"
-                      className="text-rose-300 hover:text-rose-200"
+                      className="text-rose-300"
                       onClick={() =>
                         setAttachments((prev) =>
                           prev.filter((x) => x.filename !== a.filename)
@@ -262,7 +265,7 @@ export default function CampaignsPage() {
                   </li>
                 ))}
               </ul>
-            )}
+            ) : null}
           </div>
 
           <div>
@@ -292,23 +295,23 @@ export default function CampaignsPage() {
               disabled={sending}
               onClick={() => send(false)}
             >
-              {sending ? 'Sending…' : 'Send emails'}
+              {sending ? 'Sending...' : 'Send emails'}
             </button>
           </div>
 
-          {error && (
+          {error ? (
             <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
               {error}
             </div>
-          )}
+          ) : null}
 
-          {result && (
+          {result ? (
             <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/80">
               <pre className="overflow-x-auto whitespace-pre-wrap text-xs">
                 {JSON.stringify(result, null, 2)}
               </pre>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -316,7 +319,7 @@ export default function CampaignsPage() {
             <h3 className="text-sm font-semibold text-white">HTML tips</h3>
             <ul className="mt-3 space-y-2 text-sm text-white/55">
               <li>Use inline CSS for email clients</li>
-              <li>Keep width around 560–600px</li>
+              <li>Keep width around 560 to 600px</li>
               <li>Tokens work inside HTML too</li>
             </ul>
           </div>
@@ -324,7 +327,7 @@ export default function CampaignsPage() {
             <h3 className="text-sm font-semibold text-white">Files</h3>
             <ul className="mt-3 space-y-2 text-sm text-white/55">
               <li>PDF, images, docs supported</li>
-              <li>Total payload under ~8MB</li>
+              <li>Total payload under about 8MB</li>
               <li>Same files go to every recipient</li>
             </ul>
           </div>
