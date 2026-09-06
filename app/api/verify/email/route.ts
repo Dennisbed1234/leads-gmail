@@ -5,6 +5,12 @@ import { verifyEmail, verifyMany } from '@/lib/email/verify';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+function statusFor(result: { status: string }) {
+  if (result.status === 'valid') return 'VERIFIED';
+  if (result.status === 'invalid' || result.status === 'disposable') return 'INVALID';
+  return null;
+}
+
 export async function GET() {
   return NextResponse.json({
     paidVerifier: Boolean(process.env.ZEROBOUNCE_API_KEY),
@@ -20,21 +26,16 @@ export async function POST(request: Request) {
     const body = await request.json();
     const save = body.save !== false;
 
-    // Single
     if (body.email && typeof body.email === 'string') {
       const result = await verifyEmail(body.email);
 
       if (save && result.email) {
+        const status = statusFor(result);
         await prisma.lead.updateMany({
           where: { email: result.email },
           data: {
             score: result.score,
-            status:
-              result.status === 'valid'
-                ? 'VERIFIED'
-                : result.status === 'invalid' || result.status === 'disposable'
-                  ? 'INVALID'
-                  : undefined,
+            ...(status ? { status } : {}),
             notes: result.reason || undefined,
           },
         });
@@ -43,7 +44,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, result });
     }
 
-    // Batch from body.emails[]
     if (Array.isArray(body.emails)) {
       const emails = body.emails.map(String).slice(0, 50);
       const results = await verifyMany(emails);
@@ -51,16 +51,12 @@ export async function POST(request: Request) {
       if (save) {
         for (const r of results) {
           try {
+            const status = statusFor(r);
             await prisma.lead.updateMany({
               where: { email: r.email },
               data: {
                 score: r.score,
-                status:
-                  r.status === 'valid'
-                    ? 'VERIFIED'
-                    : r.status === 'invalid' || r.status === 'disposable'
-                      ? 'INVALID'
-                      : undefined,
+                ...(status ? { status } : {}),
                 notes: r.reason || undefined,
               },
             });
@@ -86,7 +82,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // Batch from DB leads
     if (body.fromLeads) {
       const limit = Math.min(Number(body.limit) || 25, 50);
       const leads = await prisma.lead.findMany({
@@ -103,16 +98,12 @@ export async function POST(request: Request) {
 
       for (const r of results) {
         try {
+          const status = statusFor(r);
           await prisma.lead.updateMany({
             where: { email: r.email },
             data: {
               score: r.score,
-              status:
-                r.status === 'valid'
-                  ? 'VERIFIED'
-                  : r.status === 'invalid' || r.status === 'disposable'
-                    ? 'INVALID'
-                    : undefined,
+              ...(status ? { status } : {}),
               notes: r.reason || undefined,
             },
           });
@@ -138,10 +129,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      {
-        error:
-          'Provide email, emails[], or fromLeads:true',
-      },
+      { error: 'Provide email, emails[], or fromLeads:true' },
       { status: 400 }
     );
   } catch (error: any) {
