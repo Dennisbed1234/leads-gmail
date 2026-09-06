@@ -26,9 +26,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     <>
       <div
         className={
-          open
-            ? 'fixed inset-0 z-40 bg-slate-900/50 lg:hidden'
-            : 'hidden'
+          open ? 'fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden' : 'hidden'
         }
         onClick={onClose}
         aria-hidden="true"
@@ -36,28 +34,28 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
       <aside
         className={
-          'fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col bg-slate-900 text-slate-300 transition-transform duration-200 ease-out ' +
+          'fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col border-r border-white/10 bg-[#12081f]/95 text-white/70 backdrop-blur-2xl transition-transform duration-200 ease-out ' +
           (open ? 'translate-x-0 ' : '-translate-x-full ') +
           'lg:translate-x-0'
         }
       >
         <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-indigo-500 text-sm font-bold text-white shadow-lg shadow-fuchsia-500/30">
               LB
             </div>
             <div>
-              <div className="text-sm font-semibold tracking-tight text-white">
+              <div className="text-sm font-bold tracking-tight text-white">
                 LeadBot Pro
               </div>
-              <div className="text-[11px] text-slate-500">SEC + Enrichment</div>
+              <div className="text-[11px] text-fuchsia-300/70">Colorful growth OS</div>
             </div>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white lg:hidden"
+            className="rounded-lg p-2 text-white/50 hover:bg-white/10 hover:text-white lg:hidden"
             aria-label="Close menu"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -79,10 +77,10 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                 href={item.href}
                 onClick={onClose}
                 className={
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ' +
+                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ' +
                   (active
-                    ? 'bg-white/10 text-white'
-                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200')
+                    ? 'bg-gradient-to-r from-rose-500/25 via-fuchsia-500/20 to-indigo-500/25 text-white shadow-inner'
+                    : 'text-white/55 hover:bg-white/5 hover:text-white')
                 }
               >
                 <item.icon active={active} />
@@ -93,9 +91,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         </nav>
 
         <div className="border-t border-white/10 p-4">
-          <div className="rounded-lg bg-white/5 px-3 py-3">
-            <div className="text-xs font-medium text-slate-300">Public sources</div>
-            <div className="mt-0.5 text-[11px] text-slate-500">
+          <div className="rounded-xl border border-white/10 bg-gradient-to-br from-fuchsia-500/10 to-cyan-500/10 px-3 py-3">
+            <div className="text-xs font-semibold text-white">Public sources</div>
+            <div className="mt-0.5 text-[11px] text-white/45">
               SEC · GitHub · Contact pages
             </div>
           </div>
@@ -107,7 +105,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
 function IconDashboard({ active }: { active?: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-indigo-400' : 'text-slate-500'}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <rect x="3" y="3" width="7" height="7" rx="1" />
       <rect x="14" y="3" width="7" height="7" rx="1" />
       <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -118,7 +116,7 @@ function IconDashboard({ active }: { active?: boolean }) {
 
 function IconSearch({ active }: { active?: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-indigo-400' : 'text-slate-500'}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <circle cx="11" cy="11" r="7" />
       <path d="M21 21l-4.3-4.3" />
     </svg>
@@ -127,7 +125,7 @@ function IconSearch({ active }: { active?: boolean }) {
 
 function IconSpark({ active }: { active?: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-indigo-400' : 'text-slate-500'}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <path d="M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3z" />
     </svg>
   );
@@ -135,7 +133,7 @@ function IconSpark({ active }: { active?: boolean }) {
 
 function IconCheck({ active }: { active?: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-indigo-400' : 'text-slate-500'}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <path d="M20 6L9 17l-5-5" />
     </svg>
   );
@@ -143,7 +141,7 @@ function IconCheck({ active }: { active?: boolean }) {
 
 function IconUsers({ active }: { active?: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-indigo-400' : 'text-slate-500'}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
       <circle cx="9" cy="7" r="4" />
       <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
@@ -154,7 +152,7 @@ function IconUsers({ active }: { active?: boolean }) {
 
 function IconChart({ active }: { active?: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-indigo-400' : 'text-slate-500'}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <path d="M3 3v18h18" />
       <path d="M18 17V9" />
       <path d="M13 17V5" />
@@ -165,7 +163,7 @@ function IconChart({ active }: { active?: boolean }) {
 
 function IconMail({ active }: { active?: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-indigo-400' : 'text-slate-500'}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="M3 7l9 6 9-6" />
     </svg>
@@ -174,7 +172,7 @@ function IconMail({ active }: { active?: boolean }) {
 
 function IconSettings({ active }: { active?: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-indigo-400' : 'text-slate-500'}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <circle cx="12" cy="12" r="3" />
       <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
     </svg>
