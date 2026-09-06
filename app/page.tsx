@@ -2,15 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  Users,
-  Building2,
-  TrendingUp,
-  Mail,
-  ArrowRight,
-  Search,
-  Activity,
-} from 'lucide-react';
 
 interface Stats {
   totalLeads: number;
@@ -38,28 +29,24 @@ export default function DashboardPage() {
     {
       label: 'Total Leads',
       value: stats?.totalLeads ?? '—',
-      icon: Users,
-      color: 'text-primary-600 bg-primary-50',
+      accent: 'bg-indigo-50 text-indigo-600',
     },
     {
       label: 'Companies',
       value: stats?.uniqueCompanies ?? '—',
-      icon: Building2,
-      color: 'text-violet-600 bg-violet-50',
+      accent: 'bg-violet-50 text-violet-600',
     },
     {
       label: 'Avg Score',
       value: stats?.averageScore?._avg?.score
         ? Math.round(stats.averageScore._avg.score)
         : '—',
-      icon: TrendingUp,
-      color: 'text-emerald-600 bg-emerald-50',
+      accent: 'bg-emerald-50 text-emerald-600',
     },
     {
       label: 'Sources',
       value: stats?.sources?.length ?? '—',
-      icon: Activity,
-      color: 'text-amber-600 bg-amber-50',
+      accent: 'bg-amber-50 text-amber-600',
     },
   ];
 
@@ -73,74 +60,54 @@ export default function DashboardPage() {
           </p>
         </div>
         <Link href="/extract" className="btn-primary">
-          <Search size={16} />
           Extract Leads
         </Link>
       </div>
 
-      {/* Stats */}
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => (
           <div key={card.label} className="card p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-500">{card.label}</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
-                  {loading ? (
-                    <span className="inline-block h-8 w-12 animate-pulse rounded bg-slate-100" />
-                  ) : (
-                    card.value
-                  )}
-                </p>
-              </div>
-              <div className={`rounded-lg p-2.5 ${card.color}`}>
-                <card.icon size={20} />
-              </div>
-            </div>
+            <p className="text-sm font-medium text-slate-500">{card.label}</p>
+            <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">
+              {loading ? (
+                <span className="inline-block h-8 w-12 animate-pulse rounded bg-slate-100" />
+              ) : (
+                card.value
+              )}
+            </p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Quick actions */}
-        <div className="card p-6 lg:col-span-1">
+        <div className="card p-6">
           <h2 className="text-sm font-semibold text-slate-900">Quick actions</h2>
           <div className="mt-4 space-y-2">
             <Link
               href="/extract"
-              className="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-primary-200 hover:bg-primary-50/50"
+              className="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50/50"
             >
-              <span className="flex items-center gap-2">
-                <Search size={16} className="text-primary-600" />
-                Run SEC extract
-              </span>
-              <ArrowRight size={16} className="text-slate-400" />
+              Run SEC extract
+              <span className="text-slate-400">→</span>
             </Link>
             <Link
               href="/leads"
-              className="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-primary-200 hover:bg-primary-50/50"
+              className="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50/50"
             >
-              <span className="flex items-center gap-2">
-                <Users size={16} className="text-primary-600" />
-                Browse all leads
-              </span>
-              <ArrowRight size={16} className="text-slate-400" />
+              Browse all leads
+              <span className="text-slate-400">→</span>
             </Link>
             <Link
               href="/campaigns"
-              className="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-primary-200 hover:bg-primary-50/50"
+              className="flex items-center justify-between rounded-lg border border-slate-100 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50/50"
             >
-              <span className="flex items-center gap-2">
-                <Mail size={16} className="text-primary-600" />
-                Start a campaign
-              </span>
-              <ArrowRight size={16} className="text-slate-400" />
+              Start a campaign
+              <span className="text-slate-400">→</span>
             </Link>
           </div>
         </div>
 
-        {/* Status breakdown */}
-        <div className="card p-6 lg:col-span-1">
+        <div className="card p-6">
           <h2 className="text-sm font-semibold text-slate-900">Lead status</h2>
           <div className="mt-4 space-y-3">
             {loading ? (
@@ -165,8 +132,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Sources */}
-        <div className="card p-6 lg:col-span-1">
+        <div className="card p-6">
           <h2 className="text-sm font-semibold text-slate-900">Sources</h2>
           <div className="mt-4 space-y-3">
             {loading ? (
