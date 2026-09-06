@@ -2,13 +2,27 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+type Attachment = {
+  filename: string;
+  content: string;
+  contentType?: string;
+};
+
+const DEFAULT_HTML = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#0f0720;color:#f8fafc;border-radius:16px">
+  <div style="height:6px;border-radius:999px;background:linear-gradient(90deg,#f43f5e,#a855f7,#22d3ee);margin-bottom:20px"></div>
+  <h1 style="font-size:22px;margin:0 0 12px">Hi {{name}},</h1>
+  <p style="line-height:1.6;color:#e2e8f0">I came across <strong>{{company}}</strong> and wanted to share a quick idea that could help your team.</p>
+  <p style="line-height:1.6;color:#e2e8f0">Happy to send a short overview if useful.</p>
+  <p style="margin-top:24px;color:#cbd5e1">Best regards</p>
+</div>`;
+
 export default function CampaignsPage() {
   const [mode, setMode] = useState<'manual' | 'leads'>('manual');
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('Quick idea for {{company}}');
-  const [body, setBody] = useState(
-    'Hi {{name}},\n\nI came across {{company}} and wanted to share a quick idea...\n\nBest regards'
-  );
+  const [body, setBody] = useState(DEFAULT_HTML);
+  const [isHtml, setIsHtml] = useState(true);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [limit, setLimit] = useState(20);
   const [sending, setSending] = useState(false);
   const [smtp, setSmtp] = useState<any>(null);
@@ -30,6 +44,30 @@ export default function CampaignsPage() {
       .filter((s) => s.includes('@')).length;
   }, [to]);
 
+  const onFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const next: Attachment[] = [...attachments];
+
+    for (const file of Array.from(files).slice(0, 5 - next.length)) {
+      if (file.size > 4 * 1024 * 1024) {
+        setError(`File ${file.name} is over 4MB`);
+        continue;
+      }
+      const buf = await file.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const base64 = btoa(binary);
+      next.push({
+        filename: file.name,
+        content: base64,
+        contentType: file.type || undefined,
+      });
+    }
+
+    setAttachments(next.slice(0, 5));
+  };
+
   const send = async (dryRun = false) => {
     setSending(true);
     setError('');
@@ -47,6 +85,8 @@ export default function CampaignsPage() {
           to: mode === 'manual' ? to : undefined,
           subject,
           body,
+          html: isHtml,
+          attachments,
           limit,
           status: 'NEW',
           dryRun,
@@ -63,45 +103,40 @@ export default function CampaignsPage() {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       <div className="page-header">
         <h1 className="page-title">Campaigns</h1>
         <p className="page-subtitle">
-          Send to specific emails or to saved leads via Gmail SMTP
+          HTML templates, attachments, multi-recipient Gmail SMTP
         </p>
       </div>
 
       <div
         className={
-          'mb-6 rounded-xl border px-4 py-3 text-sm ' +
+          'rounded-2xl border px-4 py-3 text-sm ' +
           (smtp?.verified
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
             : smtp?.configured
-              ? 'border-amber-200 bg-amber-50 text-amber-900'
-              : 'border-red-200 bg-red-50 text-red-800')
+              ? 'border-amber-400/30 bg-amber-500/10 text-amber-100'
+              : 'border-rose-400/30 bg-rose-500/10 text-rose-100')
         }
       >
         {!smtp && 'Checking SMTP…'}
         {smtp && !smtp.configured && (
-          <>
-            SMTP not configured. Set SMTP_USER and SMTP_PASS (Gmail App Password)
-            on Vercel.
-          </>
+          <>SMTP not configured. Set SMTP_USER and SMTP_PASS on Vercel.</>
         )}
         {smtp?.configured && smtp.verified && (
           <>
-            SMTP connected as <strong>{smtp.user}</strong> — ready to send.
+            SMTP connected as <strong>{smtp.user}</strong> — ready to send HTML +
+            files.
           </>
         )}
         {smtp?.configured && !smtp.verified && (
-          <>
-            Credentials present but verify failed:{' '}
-            {smtp.error || 'check App Password / 2FA'}.
-          </>
+          <>Verify failed: {smtp.error || 'check App Password / 2FA'}.</>
         )}
       </div>
 
-      <div className="mb-6 flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           className={mode === 'manual' ? 'btn-primary' : 'btn-secondary'}
@@ -124,29 +159,21 @@ export default function CampaignsPage() {
             <div>
               <label className="label">
                 To{' '}
-                <span className="font-normal text-slate-400">
+                <span className="font-normal text-white/40">
                   ({parsedCount} address{parsedCount === 1 ? '' : 'es'})
                 </span>
               </label>
               <textarea
                 className="input min-h-[120px] resize-y font-mono text-sm"
-                placeholder={
-                  'one@example.com\ntwo@example.com\nJane Doe <jane@acme.com>'
-                }
+                placeholder={'one@example.com\ntwo@example.com'}
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
               />
-              <p className="mt-1.5 text-xs text-slate-400">
-                One email per line, or separate with commas. Optional format:{' '}
-                <code className="rounded bg-slate-100 px-1">
-                  {'Name <email@domain.com>'}
-                </code>
-              </p>
             </div>
           ) : (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Will send to up to <strong>{limit}</strong> leads with status{' '}
-              <strong>NEW</strong> from your database.
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+              Sends to up to <strong className="text-white">{limit}</strong> leads
+              with status <strong className="text-white">NEW</strong>.
             </div>
           )}
 
@@ -159,25 +186,87 @@ export default function CampaignsPage() {
             />
           </div>
 
-          <div>
-            <label className="label">Body</label>
-            <textarea
-              className="input resize-y"
-              rows={10}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-            <p className="mt-1.5 text-xs text-slate-400">
-              Tokens:{' '}
-              <code className="rounded bg-slate-100 px-1">{'{{name}}'}</code>{' '}
-              <code className="rounded bg-slate-100 px-1">{'{{company}}'}</code>{' '}
-              <code className="rounded bg-slate-100 px-1">{'{{email}}'}</code>{' '}
-              <code className="rounded bg-slate-100 px-1">{'{{title}}'}</code>
-            </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="inline-flex items-center gap-2 text-sm text-white/70">
+              <input
+                type="checkbox"
+                checked={isHtml}
+                onChange={(e) => setIsHtml(e.target.checked)}
+              />
+              Send as HTML template
+            </label>
+            {isHtml && (
+              <button
+                type="button"
+                className="btn-ghost text-xs"
+                onClick={() => setBody(DEFAULT_HTML)}
+              >
+                Load sample template
+              </button>
+            )}
           </div>
 
           <div>
-            <label className="label">Max recipients this send</label>
+            <label className="label">{isHtml ? 'HTML body' : 'Plain text body'}</label>
+            <textarea
+              className="input min-h-[220px] resize-y font-mono text-xs"
+              rows={12}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+            <p className="mt-1.5 text-xs text-white/40">
+              Tokens: {'{{name}}'} {'{{company}}'} {'{{email}}'} {'{{title}}'}
+            </p>
+          </div>
+
+          {isHtml && (
+            <div>
+              <label className="label">Preview</label>
+              <div
+                className="overflow-hidden rounded-xl border border-white/10 bg-black/30 p-3"
+                dangerouslySetInnerHTML={{
+                  __html: body
+                    .replace(/\{\{name\}\}/g, 'Alex')
+                    .replace(/\{\{company\}\}/g, 'Acme')
+                    .replace(/\{\{email\}\}/g, 'alex@acme.com')
+                    .replace(/\{\{title\}\}/g, 'CEO'),
+                }}
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="label">Attachments (max 5, 4MB each)</label>
+            <input
+              type="file"
+              multiple
+              className="block w-full text-sm text-white/70 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-sm file:text-white hover:file:bg-white/15"
+              onChange={(e) => onFiles(e.target.files)}
+            />
+            {attachments.length > 0 && (
+              <ul className="mt-2 space-y-1 text-xs text-white/60">
+                {attachments.map((a) => (
+                  <li key={a.filename} className="flex items-center justify-between gap-2">
+                    <span>{a.filename}</span>
+                    <button
+                      type="button"
+                      className="text-rose-300 hover:text-rose-200"
+                      onClick={() =>
+                        setAttachments((prev) =>
+                          prev.filter((x) => x.filename !== a.filename)
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <label className="label">Max recipients</label>
             <input
               type="number"
               min={1}
@@ -195,7 +284,7 @@ export default function CampaignsPage() {
               disabled={sending}
               onClick={() => send(true)}
             >
-              Preview
+              Preview send
             </button>
             <button
               type="button"
@@ -203,22 +292,18 @@ export default function CampaignsPage() {
               disabled={sending}
               onClick={() => send(false)}
             >
-              {sending
-                ? 'Sending…'
-                : mode === 'manual'
-                  ? 'Send to recipients'
-                  : 'Send to leads'}
+              {sending ? 'Sending…' : 'Send emails'}
             </button>
           </div>
 
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
               {error}
             </div>
           )}
 
           {result && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+            <div className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/80">
               <pre className="overflow-x-auto whitespace-pre-wrap text-xs">
                 {JSON.stringify(result, null, 2)}
               </pre>
@@ -228,21 +313,19 @@ export default function CampaignsPage() {
 
         <div className="space-y-4">
           <div className="card p-5">
-            <h3 className="text-sm font-semibold text-slate-900">How To works</h3>
-            <ul className="mt-3 space-y-2 text-sm text-slate-600">
-              <li>Paste many emails at once</li>
-              <li>New line or comma separated</li>
-              <li>Each person gets their own email (not one group To)</li>
-              <li>About 2 seconds between sends (Gmail-friendly)</li>
+            <h3 className="text-sm font-semibold text-white">HTML tips</h3>
+            <ul className="mt-3 space-y-2 text-sm text-white/55">
+              <li>Use inline CSS for email clients</li>
+              <li>Keep width around 560–600px</li>
+              <li>Tokens work inside HTML too</li>
             </ul>
           </div>
-
           <div className="card p-5">
-            <h3 className="text-sm font-semibold text-slate-900">Limits</h3>
-            <ul className="mt-3 space-y-2 text-sm text-slate-600">
-              <li>Max 50 recipients per click</li>
-              <li>Gmail daily caps apply (about 100 to 500)</li>
-              <li>Use Preview before real sends</li>
+            <h3 className="text-sm font-semibold text-white">Files</h3>
+            <ul className="mt-3 space-y-2 text-sm text-white/55">
+              <li>PDF, images, docs supported</li>
+              <li>Total payload under ~8MB</li>
+              <li>Same files go to every recipient</li>
             </ul>
           </div>
         </div>
