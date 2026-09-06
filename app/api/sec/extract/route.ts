@@ -122,7 +122,7 @@ export async function POST(request: Request) {
             cik: cik,
             filingType: filingType,
             score: calculateScore(exec),
-            tags: ['Executive', 'C-Suite', 'Gmail', 'Verified'],
+            tags: JSON.stringify(['Executive', 'C-Suite', 'Gmail', 'Verified']),
             status: 'NEW',
           },
         });
