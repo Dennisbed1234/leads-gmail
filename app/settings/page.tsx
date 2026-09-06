@@ -25,8 +25,7 @@ export default function SettingsPage() {
             <span className="badge bg-red-50 text-red-700">Required</span>
           </div>
           <p className="mt-2 text-sm text-slate-600">
-            PostgreSQL connection string from Neon, Supabase, or Railway. SQLite
-            will not work on Vercel.
+            PostgreSQL connection string from Neon, Supabase, or Railway.
           </p>
         </div>
 
@@ -38,8 +37,21 @@ export default function SettingsPage() {
             <span className="badge bg-red-50 text-red-700">Required</span>
           </div>
           <p className="mt-2 text-sm text-slate-600">
-            Descriptive User-Agent for SEC EDGAR, for example:{' '}
+            Example:{' '}
             <span className="font-mono text-xs">LeadBot Pro (you@domain.com)</span>
+          </p>
+        </div>
+
+        <div className="card p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="rounded bg-slate-100 px-2 py-0.5 text-sm font-medium text-slate-800">
+              GITHUB_TOKEN
+            </code>
+            <span className="badge bg-slate-100 text-slate-600">Recommended</span>
+          </div>
+          <p className="mt-2 text-sm text-slate-600">
+            Personal access token for GitHub Enrich (higher API rate limits). Create at
+            GitHub → Settings → Developer settings → Personal access tokens.
           </p>
         </div>
 
@@ -54,15 +66,6 @@ export default function SettingsPage() {
             Only needed if you want to send real email campaigns.
           </p>
         </div>
-      </div>
-
-      <div className="mt-8 card p-6">
-        <h2 className="text-sm font-semibold text-slate-900">About verification</h2>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          Google does not expose a public API to confirm Gmail account existence.
-          LeadBot validates format + MX records and scores pattern quality. For
-          higher accuracy later, integrate a paid email verification provider.
-        </p>
       </div>
     </div>
   );
