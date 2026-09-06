@@ -57,13 +57,15 @@ export class SecClient {
     const paddedCik = cleanCik.padStart(10, '0');
 
     const submissionsUrl =
-      `${SEC_BASE_URL}/files/submissions/CIK${paddedCik}.json`;
-
+  `https://data.sec.gov/submissions/CIK${paddedCik}.json`;
     try {
       const response = await fetch(submissionsUrl, {
-        headers: this.getHeaders('application/json'),
-        cache: 'no-store',
-      });
+  headers: {
+    'User-Agent': this.userAgent,
+    'Accept': 'application/json',
+  },
+  cache: 'no-store',
+});
 
       if (!response.ok) {
         console.error(
