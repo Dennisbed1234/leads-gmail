@@ -3,15 +3,17 @@
   "version": "1.0.0",
   "description": "Enterprise lead generation platform using SEC EDGAR and Gmail verification",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "postinstall": "prisma generate",
-    "db:push": "prisma db push",
-    "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+ "scripts": {
+  "dev": "next dev",
+  "build": "prisma db push && next build",
+  "start": "next start",
+  "lint": "next lint",
+  "postinstall": "prisma generate",
+  "db:push": "prisma db push",
+  "db:generate": "prisma generate",
+  "db:studio": "prisma studio"
+},
+  
   },
   "dependencies": {
     "next": "14.0.4",
