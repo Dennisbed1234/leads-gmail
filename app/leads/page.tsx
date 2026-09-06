@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Download, Users, Loader2 } from 'lucide-react';
 
 interface Lead {
   id: string;
@@ -12,7 +11,6 @@ interface Lead {
   status: string;
   score: number;
   source?: string;
-  createdAt?: string;
 }
 
 export default function LeadsPage() {
@@ -37,9 +35,7 @@ export default function LeadsPage() {
         !query ||
         [l.name, l.email, l.company, l.title]
           .filter(Boolean)
-          .some((v) =>
-            String(v).toLowerCase().includes(query.toLowerCase())
-          );
+          .some((v) => String(v).toLowerCase().includes(query.toLowerCase()));
 
       const matchesStatus =
         statusFilter === 'ALL' || l.status === statusFilter;
@@ -91,27 +87,24 @@ export default function LeadsPage() {
             {loading ? 'Loading…' : `${filtered.length} of ${leads.length} leads`}
           </p>
         </div>
-        <button onClick={exportCsv} className="btn-secondary" disabled={!filtered.length}>
-          <Download size={16} />
+        <button
+          type="button"
+          onClick={exportCsv}
+          className="btn-secondary"
+          disabled={!filtered.length}
+        >
           Export CSV
         </button>
       </div>
 
-      {/* Filters */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
-        <div className="relative flex-1">
-          <Search
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-          />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name, email, company…"
-            className="input pl-9"
-          />
-        </div>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search name, email, company…"
+          className="input flex-1"
+        />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -127,15 +120,9 @@ export default function LeadsPage() {
 
       <div className="card overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-20 text-sm text-slate-500">
-            <Loader2 size={18} className="animate-spin" />
-            Loading leads…
-          </div>
+          <div className="py-20 text-center text-sm text-slate-500">Loading leads…</div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
-              <Users size={22} className="text-slate-400" />
-            </div>
+          <div className="py-20 text-center">
             <p className="text-sm font-medium text-slate-900">No leads found</p>
             <p className="mt-1 text-sm text-slate-500">
               {leads.length === 0
@@ -147,7 +134,7 @@ export default function LeadsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/80 text-xs font-medium uppercase tracking-wider text-slate-500">
+                <tr className="border-b border-slate-100 bg-slate-50 text-xs font-medium uppercase tracking-wider text-slate-500">
                   <th className="px-6 py-3">Name</th>
                   <th className="px-6 py-3">Title</th>
                   <th className="px-6 py-3">Company</th>
@@ -172,7 +159,7 @@ export default function LeadsPage() {
                       {lead.email ? (
                         <a
                           href={`mailto:${lead.email}`}
-                          className="font-mono text-sm text-primary-600 hover:underline"
+                          className="font-mono text-sm text-indigo-600 hover:underline"
                         >
                           {lead.email}
                         </a>
