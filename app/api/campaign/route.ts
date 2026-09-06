@@ -6,6 +6,7 @@ import {
   personalize,
   sendOneEmail,
   verifySmtpConnection,
+  type EmailAttachment,
 } from '@/lib/email/smtp';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +21,6 @@ type Recipient = {
   title?: string;
 };
 
-/** Parse To field: one email per line, or comma-separated. Supports "Name <email@x.com>" */
 function parseRecipients(raw: string): Recipient[] {
   const parts = raw
     .split(/[\n,;]+/)
@@ -51,6 +51,26 @@ function parseRecipients(raw: string): Recipient[] {
     });
   }
 
+  return out;
+}
+
+function normalizeAttachments(raw: unknown): EmailAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  const out: EmailAttachment[] = [];
+  for (const item of raw.slice(0, 5)) {
+    if (!item || typeof item !== 'object') continue;
+    const filename = String((item as any).filename || '').trim();
+    let content = String((item as any).content || '').trim();
+    const contentType = (item as any).contentType
+      ? String((item as any).contentType)
+      : undefined;
+    if (!filename || !content) continue;
+    // Strip data URL prefix if present
+    if (content.includes('base64,')) {
+      content = content.split('base64,')[1] || content;
+    }
+    out.push({ filename, content, contentType });
+  }
   return out;
 }
 
@@ -89,11 +109,13 @@ export async function POST(request: Request) {
     const body = await request.json();
     const subjectTemplate = String(body.subject || '').trim();
     const bodyTemplate = String(body.body || '').trim();
+    const isHtml = body.html !== false; // default HTML
     const dryRun = Boolean(body.dryRun);
     const mode = body.mode === 'leads' ? 'leads' : 'manual';
     const toRaw = String(body.to || body.recipients || '').trim();
     const limit = Math.min(Math.max(Number(body.limit) || 50, 1), 50);
     const statusFilter = body.status || 'NEW';
+    const attachments = normalizeAttachments(body.attachments);
 
     if (!subjectTemplate || !bodyTemplate) {
       return NextResponse.json(
@@ -155,6 +177,8 @@ export async function POST(request: Request) {
         success: true,
         dryRun: true,
         mode,
+        html: isHtml,
+        attachmentCount: attachments.length,
         wouldSend: recipients.length,
         recipients: recipients.map((r) => ({
           email: r.email,
@@ -183,16 +207,19 @@ export async function POST(request: Request) {
           title: r.title,
         };
 
+        const personalizedBody = personalize(bodyTemplate, vars);
+
         await sendOneEmail({
           to: r.email,
           subject: personalize(subjectTemplate, vars),
-          text: personalize(bodyTemplate, vars),
+          html: isHtml ? personalizedBody : undefined,
+          text: isHtml ? undefined : personalizedBody,
+          attachments,
         });
 
         sent += 1;
         sentTo.push(r.email);
 
-        // Mark DB lead contacted when sending from leads mode
         if (mode === 'leads') {
           try {
             await prisma.lead.updateMany({
@@ -214,6 +241,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       mode,
+      html: isHtml,
+      attachmentCount: attachments.length,
       sent,
       failed,
       total: recipients.length,
