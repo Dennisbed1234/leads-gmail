@@ -6,7 +6,11 @@ import { prisma } from '@/lib/db/prisma';
 
 export async function POST(request: Request) {
   try {
-    const { cik, filingType = '10-K', generateCount = 10 } = await request.json();
+    const {
+      cik,
+      filingType = '10-K',
+      generateCount = 10,
+    } = await request.json();
 
     if (!cik) {
       return NextResponse.json(
@@ -16,8 +20,11 @@ export async function POST(request: Request) {
     }
 
     // 1. Get executives from SEC
-    const executives = await secClient.extractExecutives(cik, filingType);
-    
+    const executives = await secClient.extractExecutives(
+      cik,
+      filingType
+    );
+
     if (executives.length === 0) {
       return NextResponse.json(
         { error: 'No executives found in filings' },
@@ -30,31 +37,50 @@ export async function POST(request: Request) {
     const companyName = company?.name || `Company_${cik}`;
 
     // 3. Generate Gmail addresses
-    const allGmails: { name: string; title: string; emails: string[] }[] = [];
-    
+    const allGmails: {
+      name: string;
+      title: string;
+      emails: string[];
+    }[] = [];
+
     for (const exec of executives.slice(0, generateCount)) {
-      const emails = GmailGenerator.getMostLikelyGmails(exec.name);
+      const emails = GmailGenerator.getMostLikelyGmails(
+        exec.name
+      );
+
       allGmails.push({
         name: exec.name,
         title: exec.title,
-        emails: emails.slice(0, 10)
+        emails: emails.slice(0, 10),
       });
     }
 
     // 4. Verify all generated emails
-    const allEmails = allGmails.flatMap(e => e.emails);
+    const allEmails = allGmails.flatMap(
+      (e) => e.emails
+    );
+
     const verifier = new BatchVerifier();
-    const verificationResults = await verifier.verifyBatch(allEmails);
+
+    const verificationResults =
+      await verifier.verifyBatch(allEmails);
 
     // 5. Filter to only valid Gmail addresses
-    const validGmails = BatchVerifier.getValidEmails(verificationResults.results);
+    const validGmails =
+      BatchVerifier.getValidEmails(
+        verificationResults.results
+      );
 
     // 6. Save to database
     const savedLeads = [];
-    
+
     for (const exec of executives.slice(0, generateCount)) {
-      const execGmails = GmailGenerator.generateGmails(exec.name);
-      const validEmail = validGmails.find(g => execGmails.includes(g));
+      const execGmails =
+        GmailGenerator.generateGmails(exec.name);
+
+      const validEmail = validGmails.find((g) =>
+        execGmails.includes(g)
+      );
 
       if (validEmail) {
         const lead = await prisma.lead.create({
@@ -67,10 +93,18 @@ export async function POST(request: Request) {
             cik: cik,
             filingType: filingType,
             score: 70 + Math.floor(Math.random() * 20),
-            tags: ['Executive', 'C-Suite', 'Verified Gmail'],
-            status: 'NEW'
-          }
+
+            // SQLite-compatible JSON string
+            tags: JSON.stringify([
+              'Executive',
+              'C-Suite',
+              'Verified Gmail',
+            ]),
+
+            status: 'NEW',
+          },
         });
+
         savedLeads.push(lead);
       }
     }
@@ -86,14 +120,20 @@ export async function POST(request: Request) {
       savedLeads: savedLeads.length,
       leads: savedLeads,
       verificationStats: {
-        validityRate: verificationResults.validityRate,
-        totalChecked: verificationResults.totalVerified,
-        totalValid: verificationResults.totalValid
-      }
+        validityRate:
+          verificationResults.validityRate,
+        totalChecked:
+          verificationResults.totalVerified,
+        totalValid:
+          verificationResults.totalValid,
+      },
     });
-
   } catch (error) {
-    console.error('Error extracting leads:', error);
+    console.error(
+      'Error extracting leads:',
+      error
+    );
+
     return NextResponse.json(
       { error: 'Failed to extract leads' },
       { status: 500 }
