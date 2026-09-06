@@ -45,13 +45,25 @@ export default function SettingsPage() {
         <div className="card p-5">
           <div className="flex flex-wrap items-center gap-2">
             <code className="rounded bg-slate-100 px-2 py-0.5 text-sm font-medium text-slate-800">
+              ZEROBOUNCE_API_KEY
+            </code>
+            <span className="badge bg-slate-100 text-slate-600">For real inbox verify</span>
+          </div>
+          <p className="mt-2 text-sm text-slate-600">
+            Optional. Free mode only checks syntax + MX. Add a ZeroBounce API key to
+            confirm whether a mailbox exists. Get a key at zerobounce.net.
+          </p>
+        </div>
+
+        <div className="card p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="rounded bg-slate-100 px-2 py-0.5 text-sm font-medium text-slate-800">
               GITHUB_TOKEN
             </code>
             <span className="badge bg-slate-100 text-slate-600">Recommended</span>
           </div>
           <p className="mt-2 text-sm text-slate-600">
-            Personal access token for GitHub Enrich (higher API rate limits). Create at
-            GitHub → Settings → Developer settings → Personal access tokens.
+            Personal access token for GitHub Enrich (higher API rate limits).
           </p>
         </div>
 
@@ -63,7 +75,7 @@ export default function SettingsPage() {
             <span className="badge bg-slate-100 text-slate-600">Optional</span>
           </div>
           <p className="mt-2 text-sm text-slate-600">
-            Only needed if you want to send real email campaigns.
+            Needed to send campaigns. Use a Gmail App Password for SMTP_PASS.
           </p>
         </div>
       </div>
