@@ -64,6 +64,11 @@ export async function POST(request: Request) {
       );
     }
 
+    // Fetch company info early so we have a real name
+    const companyInfo = await secClient.getCompany(cik);
+    const companyName =
+      companyInfo?.name?.trim() || `Company CIK ${cik}`;
+
     const executives = await secClient.extractExecutives(
       cik,
       filingType
@@ -71,10 +76,18 @@ export async function POST(request: Request) {
 
     if (executives.length === 0) {
       return NextResponse.json(
-        { error: 'No executives found in filings' },
+        {
+          error: `No executives found in ${filingType} filings for CIK ${cik}. Try a different filing type or CIK.`,
+        },
         { status: 404 }
       );
     }
+
+    // Attach company name to executives
+    const enrichedExecs = executives.map((e) => ({
+      ...e,
+      company: companyName,
+    }));
 
     const allGmails: {
       name: string;
@@ -82,7 +95,7 @@ export async function POST(request: Request) {
       emails: string[];
     }[] = [];
 
-    for (const exec of executives.slice(0, generateCount)) {
+    for (const exec of enrichedExecs.slice(0, generateCount)) {
       const emails = GmailGenerator.getMostLikelyGmails(exec.name);
 
       allGmails.push({
@@ -104,36 +117,55 @@ export async function POST(request: Request) {
 
     const savedLeads = [];
 
-    for (const exec of executives.slice(0, generateCount)) {
+    for (const exec of enrichedExecs.slice(0, generateCount)) {
       const execGmails = GmailGenerator.generateGmails(exec.name);
 
-      const validEmail = validGmails.find((g) =>
+      // Pick the highest quality valid email for this exec
+      const candidateEmails = validGmails.filter((g) =>
         execGmails.includes(g)
       );
 
-      if (validEmail) {
-        const lead = await prisma.lead.create({
-          data: {
-            name: exec.name,
-            title: exec.title,
-            company: exec.company || 'Unknown',
-            email: validEmail,
-            source: 'SEC EDGAR + Gmail Verification',
-            cik: cik,
-            filingType: filingType,
-            score: calculateScore(exec),
-            tags: JSON.stringify(['Executive', 'C-Suite', 'Gmail', 'Verified']),
-            status: 'NEW',
-          },
-        });
+      // Prefer cleaner patterns
+      const preferred =
+        candidateEmails.find((e) => e.includes('.')) ||
+        candidateEmails[0];
 
-        savedLeads.push(lead);
+      if (preferred) {
+        try {
+          const lead = await prisma.lead.create({
+            data: {
+              name: exec.name,
+              title: exec.title,
+              company: companyName,
+              email: preferred,
+              source: 'SEC EDGAR + Gmail Verification',
+              cik: cik.replace(/\D/g, ''),
+              filingType: filingType,
+              score: calculateScore(exec),
+              tags: JSON.stringify([
+                'Executive',
+                'C-Suite',
+                'Gmail',
+                'Verified',
+              ]),
+              status: 'NEW',
+            },
+          });
+
+          savedLeads.push(lead);
+        } catch (dbError: any) {
+          // Skip duplicates or other DB errors without failing the whole request
+          console.warn(
+            `Could not save lead for ${exec.name}:`,
+            dbError?.message || dbError
+          );
+        }
       }
     }
 
     return NextResponse.json({
       success: true,
-      company: executives[0]?.company || 'Unknown',
+      company: companyName,
       totalExtracted: executives.length,
       gmailsGenerated: allEmails.length,
       gmailsVerified: verificationResults.totalVerified,
@@ -146,11 +178,15 @@ export async function POST(request: Request) {
         totalValid: verificationResults.totalValid,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error extracting leads:', error);
 
     return NextResponse.json(
-      { error: 'Failed to extract leads' },
+      {
+        error:
+          error?.message ||
+          'Failed to extract leads. Check server logs and that DATABASE_URL + SEC_USER_AGENT are set.',
+      },
       { status: 500 }
     );
   }
