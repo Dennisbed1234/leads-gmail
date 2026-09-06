@@ -3,6 +3,12 @@ import type { Transporter } from 'nodemailer';
 
 let transporter: Transporter | null = null;
 
+export type EmailAttachment = {
+  filename: string;
+  content: string; // base64
+  contentType?: string;
+};
+
 export function getSmtpConfig() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
@@ -65,26 +71,55 @@ export function personalize(
   });
 }
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export async function sendOneEmail(options: {
   to: string;
   subject: string;
-  text: string;
+  text?: string;
   html?: string;
+  attachments?: EmailAttachment[];
 }): Promise<{ messageId?: string }> {
   const { from } = getSmtpConfig();
   const t = getTransporter();
+
+  const html =
+    options.html ||
+    (options.text ? options.text.replace(/\n/g, '<br>') : undefined);
+  const text =
+    options.text || (options.html ? stripHtml(options.html) : '');
+
+  const attachments =
+    options.attachments?.map((a) => ({
+      filename: a.filename,
+      content: Buffer.from(a.content, 'base64'),
+      contentType: a.contentType,
+    })) || [];
+
+  // Gmail practical limit ~25MB total; keep under 10MB payload for Vercel
+  const totalBytes = attachments.reduce((n, a) => n + a.content.length, 0);
+  if (totalBytes > 8 * 1024 * 1024) {
+    throw new Error('Attachments too large (max ~8MB total for this app)');
+  }
 
   const info = await t.sendMail({
     from,
     to: options.to,
     subject: options.subject,
-    text: options.text,
-    html: options.html || options.text.replace(/\n/g, '<br>'),
+    text,
+    html,
+    attachments,
   });
 
   return { messageId: info.messageId };
 }
 
-/** Small delay helper for Gmail-friendly sending */
 export const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
