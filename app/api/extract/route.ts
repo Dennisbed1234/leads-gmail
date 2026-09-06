@@ -19,7 +19,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Get executives from SEC
+    // 1. Get company info
+    const company = await secClient.getCompany(cik);
+    const companyName = company?.name || `Company_${cik}`;
+
+    // 2. Get executives from SEC
     const executives = await secClient.extractExecutives(
       cik,
       filingType
@@ -31,10 +35,6 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
-
-    // 2. Get company info
-    const company = await secClient.getCompany(cik);
-    const companyName = company?.name || `Company_${cik}`;
 
     // 3. Generate Gmail addresses
     const allGmails: {
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
     // 5. Filter to only valid Gmail addresses
     const validGmails =
-      BatchVerifier.getValidEmails(
+      BatchVerifier.getHighConfidenceEmails(
         verificationResults.results
       );
 
@@ -83,29 +83,33 @@ export async function POST(request: Request) {
       );
 
       if (validEmail) {
-        const lead = await prisma.lead.create({
-          data: {
-            name: exec.name,
-            title: exec.title,
-            company: companyName,
-            email: validEmail,
-            source: 'SEC EDGAR + Gmail',
-            cik: cik,
-            filingType: filingType,
-            score: 70 + Math.floor(Math.random() * 20),
+        try {
+          const lead = await prisma.lead.create({
+            data: {
+              name: exec.name,
+              title: exec.title,
+              company: companyName,
+              email: validEmail,
+              source: 'SEC EDGAR + Gmail',
+              cik: cik.replace(/\D/g, ''),
+              filingType: filingType,
+              score: 70 + Math.floor(Math.random() * 20),
+              tags: JSON.stringify([
+                'Executive',
+                'C-Suite',
+                'Verified Gmail',
+              ]),
+              status: 'NEW',
+            },
+          });
 
-            // SQLite-compatible JSON string
-            tags: JSON.stringify([
-              'Executive',
-              'C-Suite',
-              'Verified Gmail',
-            ]),
-
-            status: 'NEW',
-          },
-        });
-
-        savedLeads.push(lead);
+          savedLeads.push(lead);
+        } catch (dbError: any) {
+          console.warn(
+            `Could not save lead for ${exec.name}:`,
+            dbError?.message || dbError
+          );
+        }
       }
     }
 
@@ -128,14 +132,14 @@ export async function POST(request: Request) {
           verificationResults.totalValid,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error(
       'Error extracting leads:',
       error
     );
 
     return NextResponse.json(
-      { error: 'Failed to extract leads' },
+      { error: error?.message || 'Failed to extract leads' },
       { status: 500 }
     );
   }
