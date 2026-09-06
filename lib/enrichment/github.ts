@@ -1,8 +1,8 @@
 /**
  * GitHub public email enrichment using the official REST API only.
  * - Profile email (only if user made it public)
- * - Public events / commit author emails when exposed
- * Requires GITHUB_TOKEN for higher rate limits (optional but recommended).
+ * - Public event commit author emails when exposed
+ * Set GITHUB_TOKEN on Vercel for higher rate limits (recommended).
  */
 
 export type GitHubEmailHit = {
@@ -28,12 +28,7 @@ function headers(): HeadersInit {
 
 function isUsableEmail(email: string): boolean {
   const e = email.toLowerCase().trim();
-  if (!/^[^
-	 @]+@[^
-	 @]+
-?.[^
-	 @]+$/.test(e)) return false;
-  // Skip GitHub noreply / bot noise
+  if (!/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(e)) return false;
   if (e.includes('users.noreply.github.com')) return false;
   if (e.includes('noreply')) return false;
   if (e.endsWith('.local')) return false;
@@ -84,7 +79,6 @@ export async function getUserPublicEmail(
   return null;
 }
 
-/** Pull author emails from recent public events when present */
 export async function getEmailsFromPublicEvents(
   username: string
 ): Promise<GitHubEmailHit[]> {
@@ -119,10 +113,6 @@ export async function getEmailsFromPublicEvents(
   return hits;
 }
 
-/**
- * Find public emails related to a person name / company query.
- * Returns only emails GitHub already exposes publicly.
- */
 export async function enrichFromGitHub(
   query: string,
   options?: { maxUsers?: number }
@@ -148,7 +138,7 @@ export async function enrichFromGitHub(
         }
       }
     } catch {
-      // continue next user
+      // continue
     }
   }
 
