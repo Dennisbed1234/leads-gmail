@@ -12,15 +12,14 @@ model Lead {
   name        String
   title       String?
   company     String?
-  email       String?
+  email       String?  @unique
   phone       String?
   address     String?
   industry    String?
   source      String   @default("SEC EDGAR")
   score       Int      @default(50)
 
-  // SQLite does not support Prisma primitive arrays.
-  // Store tags as a JSON string.
+  // Store tags as JSON string
   tags        String?
 
   notes       String?
@@ -37,7 +36,8 @@ model Lead {
   @@index([company])
   @@index([status])
   @@index([source])
-  @@index([email])
+  @@index([cik])
+  @@index([createdAt])
 }
 
 model Company {
