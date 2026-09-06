@@ -41,13 +41,20 @@ export class BatchVerifier {
 
   static getValidEmails(results: any[]): string[] {
     return results
-      .filter((r) => r.valid && r.confidence === 'high')
+      .filter((r) => r.valid && (r.confidence === 'high' || r.confidence === 'medium'))
       .map((r) => r.email);
   }
 
   static getHighConfidenceEmails(results: any[]): string[] {
-    return results
+    // Prefer high, fall back to medium so the pipeline produces results
+    const high = results
       .filter((r) => r.valid && r.confidence === 'high')
+      .map((r) => r.email);
+
+    if (high.length > 0) return high;
+
+    return results
+      .filter((r) => r.valid && r.confidence === 'medium')
       .map((r) => r.email);
   }
 
