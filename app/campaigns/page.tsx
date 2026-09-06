@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail, Send, Loader2, CheckCircle2 } from 'lucide-react';
 
 export default function CampaignsPage() {
   const [subject, setSubject] = useState('');
@@ -14,10 +13,7 @@ export default function CampaignsPage() {
 
     setSending(true);
     setDone(false);
-
-    // Placeholder — wire to /api/campaign when ready
     await new Promise((r) => setTimeout(r, 1500));
-
     setSending(false);
     setDone(true);
   };
@@ -50,37 +46,27 @@ export default function CampaignsPage() {
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                placeholder="Hi {{name}},\n\nI noticed…"
+                placeholder={'Hi {{name}},\n\nI noticed…'}
                 rows={10}
                 className="input resize-y"
               />
               <p className="mt-1.5 text-xs text-slate-400">
-                Use {'{{name}}'} and {'{{company}}'} for personalization (when sending is wired).
+                Use {'{{name}}'} and {'{{company}}'} for personalization when sending is wired.
               </p>
             </div>
 
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={handleSend}
                 disabled={sending || !subject.trim() || !body.trim()}
                 className="btn-primary"
               >
-                {sending ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Sending…
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} />
-                    Send campaign
-                  </>
-                )}
+                {sending ? 'Sending…' : 'Send campaign'}
               </button>
 
               {done && (
-                <span className="flex items-center gap-1.5 text-sm text-emerald-600">
-                  <CheckCircle2 size={16} />
+                <span className="text-sm text-emerald-600">
                   Campaign queued (demo)
                 </span>
               )}
@@ -90,17 +76,10 @@ export default function CampaignsPage() {
 
         <div className="space-y-4">
           <div className="card p-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary-50 p-2.5 text-primary-600">
-                <Mail size={18} />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-900">SMTP required</p>
-                <p className="text-xs text-slate-500">
-                  Configure SMTP_* env vars on Vercel to enable real sending.
-                </p>
-              </div>
-            </div>
+            <p className="text-sm font-medium text-slate-900">SMTP required</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Configure SMTP_* env vars on Vercel to enable real sending.
+            </p>
           </div>
 
           <div className="card p-5">
