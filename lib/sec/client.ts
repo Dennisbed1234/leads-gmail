@@ -316,12 +316,11 @@ export class SecClient {
      * Chief Executive Officer John Smith
      */
     const patternTwo = new RegExp(
-      '\\b(' +
-        titlePattern +
-        ')\\s+([A-Z][A-Za-z-\\']+(?:\\s+[A-Z][A-Za-z-\\']+){1,4})\\b',
-      'gi'
-    );
-
+  "\\b(" +
+    titlePattern +
+    ")\\s+([A-Z][A-Za-z-']+(?:\\s+[A-Z][A-Za-z-']+){1,4})\\b",
+  "gi"
+);
     /*
      * Name followed by title with larger whitespace.
      */
