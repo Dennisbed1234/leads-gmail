@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import AppShell from '@/components/layout/AppShell';
 
 export const metadata: Metadata = {
-  title: 'LeadBot Pro - SEC EDGAR Lead Generator',
-  description: 'Extract executives from SEC filings and generate real Gmail addresses',
+  title: 'LeadBot Pro — SEC EDGAR Lead Generator',
+  description:
+    'Extract executives from SEC filings and generate verified Gmail addresses',
 };
 
 export default function RootLayout({
@@ -13,8 +15,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-gray-50 min-h-screen">
-        {children}
+      <body>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
