@@ -12,6 +12,7 @@ const nav = [
   { name: 'Leads', href: '/leads', icon: IconUsers },
   { name: 'Analytics', href: '/analytics', icon: IconChart },
   { name: 'Campaigns', href: '/campaigns', icon: IconMail },
+  { name: 'Sent inbox', href: '/inbox', icon: IconInbox },
   { name: 'Settings', href: '/settings', icon: IconSettings },
 ];
 
@@ -43,13 +44,13 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-indigo-500 text-sm font-bold text-white shadow-lg shadow-fuchsia-500/30">
-              LB
+              BOA
             </div>
             <div>
               <div className="text-sm font-bold tracking-tight text-white">
-                LeadBot Pro
+                BIG OLD ALPS
               </div>
-              <div className="text-[11px] text-fuchsia-300/70">Colorful growth OS</div>
+              <div className="text-[11px] text-fuchsia-300/70">Lead outreach</div>
             </div>
           </div>
 
@@ -93,9 +94,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
         <div className="border-t border-white/10 p-4">
           <div className="rounded-xl border border-white/10 bg-gradient-to-br from-fuchsia-500/10 to-cyan-500/10 px-3 py-3">
-            <div className="text-xs font-semibold text-white">Public sources</div>
+            <div className="text-xs font-semibold text-white">BIG OLD ALPS</div>
             <div className="mt-0.5 text-[11px] text-white/45">
-              SEC · GitHub · Contact pages
+              Sent as BOA · Campaign monitor
             </div>
           </div>
         </div>
@@ -177,6 +178,15 @@ function IconMail({ active }: { active?: boolean }) {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="M3 7l9 6 9-6" />
+    </svg>
+  );
+}
+
+function IconInbox({ active }: { active?: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </svg>
   );
 }

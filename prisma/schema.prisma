@@ -57,3 +57,24 @@ model Company {
   @@index([name])
   @@index([ticker])
 }
+
+// Outbox / sent monitor for campaign emails
+model SentEmail {
+  id          String   @id @default(cuid())
+  toEmail     String
+  toName      String?
+  subject     String
+  bodySnippet String?
+  status      String   @default("SENT") // SENT | FAILED
+  messageId   String?
+  error       String?
+  mode        String?  // manual | leads
+  isHtml      Boolean  @default(true)
+  fromName    String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([toEmail])
+  @@index([status])
+  @@index([createdAt])
+}

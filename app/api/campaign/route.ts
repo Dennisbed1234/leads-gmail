@@ -7,12 +7,12 @@ import {
   sendOneEmail,
   verifySmtpConnection,
   delay,
+  getSmtpConfig,
   type EmailAttachment,
 } from '@/lib/email/smtp';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-// Higher limit for larger batches (Vercel Pro allows up to 300s)
 export const maxDuration = 300;
 
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
@@ -75,6 +75,44 @@ function normalizeAttachments(raw: unknown): EmailAttachment[] {
     out.push({ filename, content, contentType });
   }
   return out;
+}
+
+function snippet(text?: string, html?: string): string {
+  const raw = (text || html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return raw.slice(0, 280);
+}
+
+async function logSent(data: {
+  toEmail: string;
+  toName?: string;
+  subject: string;
+  bodySnippet?: string;
+  status: 'SENT' | 'FAILED';
+  messageId?: string;
+  error?: string;
+  mode?: string;
+  isHtml?: boolean;
+}) {
+  try {
+    const { fromName } = getSmtpConfig();
+    await prisma.sentEmail.create({
+      data: {
+        toEmail: data.toEmail,
+        toName: data.toName || null,
+        subject: data.subject,
+        bodySnippet: data.bodySnippet || null,
+        status: data.status,
+        messageId: data.messageId || null,
+        error: data.error || null,
+        mode: data.mode || null,
+        isHtml: data.isHtml !== false,
+        fromName: fromName || 'BOA',
+      },
+    });
+  } catch (e) {
+    // Don't fail the campaign if logging fails (e.g. table not pushed yet)
+    console.warn('SentEmail log failed:', e);
+  }
 }
 
 export async function GET() {
@@ -228,14 +266,15 @@ export async function POST(request: Request) {
 
     for (let i = 0; i < recipients.length; i++) {
       const r = recipients[i];
-      try {
-        const vars = {
-          name: r.name,
-          company: r.company,
-          email: r.email,
-          title: r.title,
-        };
+      const vars = {
+        name: r.name,
+        company: r.company,
+        email: r.email,
+        title: r.title,
+      };
+      const subject = personalize(subjectTemplate, vars);
 
+      try {
         const personalizedHtml = htmlTemplate
           ? personalize(htmlTemplate, vars)
           : undefined;
@@ -254,9 +293,9 @@ export async function POST(request: Request) {
           (personalizedHtml ? undefined : personalizedText) ||
           undefined;
 
-        await sendOneEmail({
+        const result = await sendOneEmail({
           to: r.email,
-          subject: personalize(subjectTemplate, vars),
+          subject,
           html: html || undefined,
           text: text || undefined,
           attachments,
@@ -265,6 +304,17 @@ export async function POST(request: Request) {
 
         sent += 1;
         sentTo.push(r.email);
+
+        await logSent({
+          toEmail: r.email,
+          toName: r.name,
+          subject,
+          bodySnippet: snippet(text, html),
+          status: 'SENT',
+          messageId: result.messageId,
+          mode,
+          isHtml: preferHtml,
+        });
 
         if (mode === 'leads') {
           try {
@@ -282,7 +332,23 @@ export async function POST(request: Request) {
         }
       } catch (e: any) {
         failed += 1;
-        errors.push(`${r.email}: ${e?.message || 'send failed'}`);
+        const errMsg = e?.message || 'send failed';
+        errors.push(`${r.email}: ${errMsg}`);
+
+        await logSent({
+          toEmail: r.email,
+          toName: r.name,
+          subject,
+          bodySnippet: snippet(
+            textTemplate ? personalize(textTemplate, vars) : undefined,
+            htmlTemplate ? personalize(htmlTemplate, vars) : undefined
+          ),
+          status: 'FAILED',
+          error: errMsg,
+          mode,
+          isHtml: preferHtml,
+        });
+
         if (i < recipients.length - 1) {
           await delay(sendDelayMs());
         }
@@ -303,7 +369,7 @@ export async function POST(request: Request) {
       sentTo,
       errors: errors.slice(0, 15),
       note:
-        'Max 500/run. Paced sends. Gmail free ~100–500/day. Large batches may need Vercel Pro (300s) or smaller chunks.',
+        'Logged to Sent inbox. Max 500/run. Gmail free ~100–500/day.',
     });
   } catch (error: any) {
     console.error('Campaign error:', error);
