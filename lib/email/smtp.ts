@@ -18,38 +18,22 @@ function randHex(bytes: number): string {
   return out;
 }
 
-/** Soften phrases that SpamAssassin / Gmail score heavily */
 function sanitizeSubject(subject: string): string {
   let s = subject.trim();
   if (s === s.toUpperCase() && s.length > 8) {
     s = s.charAt(0) + s.slice(1).toLowerCase();
   }
-  // Strip excessive punctuation / money spam patterns
   s = s.replace(/!{2,}/g, '!');
   s = s.replace(/\${2,}/g, '$');
   return s.slice(0, 150);
 }
 
-function looksLikeSpammyHtml(html: string): boolean {
-  const lower = html.toLowerCase();
-  const bad = [
-    'click here now',
-    'act now',
-    'limited time offer',
-    'congratulations you won',
-    'viagra',
-    'crypto giveaway',
-  ];
-  return bad.some((b) => lower.includes(b));
-}
-
 export function getSmtpConfig() {
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
-  const user = process.env.SMTP_USER || process.env.GMAIL_USER || '';
-  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '';
+  const user = (process.env.SMTP_USER || process.env.GMAIL_USER || '').trim();
+  const pass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '').trim();
 
-  // Prefer company domain address when set (critical for SPF/DKIM alignment)
   const fromEmail = (
     process.env.SMTP_FROM ||
     process.env.GMAIL_USER ||
@@ -71,11 +55,12 @@ export function getSmtpConfig() {
     fromEmail
   ).trim();
 
-  // Envelope sender (Return-Path) — should match From domain for DMARC alignment
+  // Only use custom envelope when explicitly set.
+  // Defaulting envelope to a different domain than SMTP_USER breaks Gmail (550 / rejected).
   const envelopeFrom = (
     process.env.SMTP_ENVELOPE_FROM ||
     process.env.SMTP_RETURN_PATH ||
-    fromEmail
+    ''
   ).trim();
 
   const from =
@@ -84,6 +69,12 @@ export function getSmtpConfig() {
   const domain = fromEmail.includes('@')
     ? fromEmail.split('@')[1].toLowerCase()
     : '';
+
+  const isGmail =
+    host.includes('gmail.com') ||
+    host.includes('googlemail.com') ||
+    user.endsWith('@gmail.com') ||
+    user.endsWith('@googlemail.com');
 
   return {
     host,
@@ -96,12 +87,18 @@ export function getSmtpConfig() {
     replyTo,
     envelopeFrom,
     domain,
+    isGmail,
   };
 }
 
 export function isSmtpConfigured(): boolean {
   const { user, pass } = getSmtpConfig();
   return Boolean(user && pass);
+}
+
+/** Force recreate transporter (after env change or auth errors) */
+export function resetTransporter() {
+  transporter = null;
 }
 
 export function getTransporter(): Transporter {
@@ -123,7 +120,9 @@ export function getTransporter(): Transporter {
     tls: {
       rejectUnauthorized: process.env.SMTP_TLS_REJECT !== '0',
     },
-    // Helps some providers treat connection as modern client
+    connectionTimeout: 20000,
+    greetingTimeout: 15000,
+    socketTimeout: 30000,
     name: process.env.SMTP_HELO || process.env.SMTP_HOSTNAME || undefined,
   });
 
@@ -135,12 +134,44 @@ export async function verifySmtpConnection(): Promise<{
   error?: string;
 }> {
   try {
+    resetTransporter();
     const t = getTransporter();
     await t.verify();
     return { ok: true };
   } catch (e: any) {
-    return { ok: false, error: e?.message || 'SMTP verify failed' };
+    resetTransporter();
+    return {
+      ok: false,
+      error: formatSmtpError(e),
+    };
   }
+}
+
+function formatSmtpError(e: any): string {
+  const raw = String(e?.response || e?.message || e || 'SMTP error');
+  const code = e?.responseCode || e?.code || '';
+
+  if (/Invalid login|EAUTH|535/i.test(raw) || code === 'EAUTH') {
+    return (
+      'SMTP login failed. For Gmail: use an App Password (not your normal password), ' +
+      'enable 2FA, set SMTP_USER to the full Gmail address and SMTP_PASS to the 16-char App Password.'
+    );
+  }
+  if (/Daily.*limit|rate|421|450|452/i.test(raw)) {
+    return 'SMTP rate/limit error from provider. Wait and send smaller batches.';
+  }
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ESOCKET/i.test(raw) || code === 'ESOCKET') {
+    return `Cannot reach SMTP host (${raw}). Check SMTP_HOST / SMTP_PORT / firewall.`;
+  }
+  if (/550|553|Sender.*not|not allowed|does not match/i.test(raw)) {
+    return (
+      'Provider rejected the From/envelope address. ' +
+      'With Gmail, SMTP_FROM must be the same Gmail account (or an alias on that account). ' +
+      'Do not set SMTP_ENVELOPE_FROM to a different domain unless your SMTP host allows it. ' +
+      `Detail: ${raw.slice(0, 200)}`
+    );
+  }
+  return raw.slice(0, 400);
 }
 
 export function personalize(
@@ -170,10 +201,6 @@ function makeMessageId(domain: string): string {
   return `<${randHex(16)}.${Date.now()}@${d}>`;
 }
 
-/**
- * Stronger deliverability defaults for BOA / company domain SMTP.
- * DNS (SPF + DKIM + DMARC) still does most of the work — code alone cannot “bypass” filters.
- */
 export async function sendOneEmail(options: {
   to: string;
   subject: string;
@@ -185,7 +212,18 @@ export async function sendOneEmail(options: {
   const cfg = getSmtpConfig();
   const t = getTransporter();
 
-  // Always try to provide BOTH text + html (multipart/alternative)
+  // Gmail: From address should match authenticated user (or configured send-as alias)
+  if (cfg.isGmail && cfg.fromEmail && cfg.user) {
+    const fromLower = cfg.fromEmail.toLowerCase();
+    const userLower = cfg.user.toLowerCase();
+    if (fromLower !== userLower && !fromLower.endsWith('@gmail.com')) {
+      // Allow gmail aliases on same account; warn on totally different domains
+      console.warn(
+        `SMTP_FROM (${cfg.fromEmail}) differs from SMTP_USER (${cfg.user}). Gmail may reject.`
+      );
+    }
+  }
+
   let html =
     options.html ||
     (options.text
@@ -199,15 +237,11 @@ export async function sendOneEmail(options: {
   let text =
     options.text || (options.html ? stripHtml(options.html) : '') || '.';
 
-  // Avoid empty or image-only bodies (high spam score)
   if (html && stripHtml(html).length < 20) {
-    text = text.length > 5 ? text : 'Hello,\n\nPlease see this message.\n\nRegards,\nBOA';
-  }
-
-  if (html && looksLikeSpammyHtml(html)) {
-    console.warn(
-      'Content may trigger spam filters (aggressive promo language detected)'
-    );
+    text =
+      text.length > 5
+        ? text
+        : 'Hello,\n\nPlease see this message.\n\nRegards,\nBOA';
   }
 
   const subject = sanitizeSubject(options.subject || 'Hello');
@@ -228,10 +262,7 @@ export async function sendOneEmail(options: {
     options.unsubscribeUrl || process.env.SMTP_UNSUBSCRIBE_URL || undefined;
 
   const headers: Record<string, string> = {
-    // Unique ref without looking like a bulk ESP blast
     'X-Entity-Ref-ID': randHex(12),
-    // Encourage transactional treatment where supported
-    'X-Auto-Response-Suppress': 'OOF, AutoReply',
   };
 
   if (unsubscribeUrl) {
@@ -239,39 +270,54 @@ export async function sendOneEmail(options: {
     headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
   }
 
-  // Optional List-Id for domain-owned mail
-  if (cfg.domain) {
-    headers['List-Id'] = `<outreach.${cfg.domain}>`;
+  // Envelope: only if explicitly configured AND safe
+  // Gmail rejects MAIL FROM that is not the authenticated account
+  let envelope: { from: string; to: string } | undefined;
+  if (cfg.envelopeFrom) {
+    if (cfg.isGmail) {
+      const envLower = cfg.envelopeFrom.toLowerCase();
+      const userLower = cfg.user.toLowerCase();
+      if (envLower === userLower || envLower.endsWith('@gmail.com')) {
+        envelope = { from: cfg.envelopeFrom, to: options.to };
+      }
+      // else skip envelope — let nodemailer use auth user
+    } else {
+      envelope = { from: cfg.envelopeFrom, to: options.to };
+    }
   }
 
-  const info = await t.sendMail({
-    from: cfg.from,
-    // Align Return-Path / envelope with From domain when possible
-    envelope: cfg.envelopeFrom
-      ? { from: cfg.envelopeFrom, to: options.to }
-      : undefined,
-    to: options.to,
-    replyTo: cfg.replyTo || cfg.fromEmail,
-    subject,
-    text,
-    html,
-    attachments,
-    messageId: makeMessageId(cfg.domain || 'mail.local'),
-    date: new Date(),
-    encoding: 'utf-8',
-    headers,
-    // Priority normal — “high priority” is a spam signal
-    priority: 'normal',
-  });
+  try {
+    const info = await t.sendMail({
+      from: cfg.from,
+      envelope,
+      to: options.to,
+      replyTo: cfg.replyTo || cfg.fromEmail,
+      subject,
+      text,
+      html,
+      attachments,
+      messageId: makeMessageId(cfg.domain || 'mail.local'),
+      date: new Date(),
+      encoding: 'utf-8',
+      headers,
+      priority: 'normal',
+    });
 
-  return { messageId: info.messageId };
+    return { messageId: info.messageId };
+  } catch (e: any) {
+    // Auth errors: drop cached transporter so next try re-auths
+    if (/EAUTH|Invalid login|535/i.test(String(e?.message || e?.code || ''))) {
+      resetTransporter();
+    }
+    throw new Error(formatSmtpError(e));
+  }
 }
 
 export const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 export function sendDelayMs(): number {
-  const base = parseInt(process.env.SMTP_SEND_DELAY_MS || '5000', 10);
-  const jitter = Math.floor(Math.random() * 4000);
-  return Math.max(3000, (Number.isFinite(base) ? base : 5000) + jitter);
+  const base = parseInt(process.env.SMTP_SEND_DELAY_MS || '4000', 10);
+  const jitter = Math.floor(Math.random() * 3000);
+  return Math.max(2500, (Number.isFinite(base) ? base : 4000) + jitter);
 }

@@ -78,7 +78,10 @@ function normalizeAttachments(raw: unknown): EmailAttachment[] {
 }
 
 function snippet(text?: string, html?: string): string {
-  const raw = (text || html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const raw = (text || html || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   return raw.slice(0, 280);
 }
 
@@ -110,7 +113,6 @@ async function logSent(data: {
       },
     });
   } catch (e) {
-    // Don't fail the campaign if logging fails (e.g. table not pushed yet)
     console.warn('SentEmail log failed:', e);
   }
 }
@@ -119,6 +121,7 @@ export async function GET() {
   const configured = isSmtpConfigured();
   let verified = false;
   let error: string | undefined;
+  const cfg = getSmtpConfig();
 
   if (configured) {
     const result = await verifySmtpConnection();
@@ -130,8 +133,10 @@ export async function GET() {
     configured,
     verified,
     error,
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    user: process.env.SMTP_USER || process.env.GMAIL_USER || null,
+    host: cfg.host,
+    user: cfg.user || null,
+    from: cfg.fromEmail || null,
+    fromName: cfg.fromName || null,
     maxRecipients: MAX_RECIPIENTS,
   });
 }
@@ -367,9 +372,11 @@ export async function POST(request: Request) {
       total: recipients.length,
       limit,
       sentTo,
-      errors: errors.slice(0, 15),
+      errors: errors.slice(0, 20),
       note:
-        'Logged to Sent inbox. Max 500/run. Gmail free ~100–500/day.',
+        failed > 0
+          ? 'See errors[] and Sent inbox for details. Common fix: Gmail App Password + SMTP_FROM must match SMTP_USER.'
+          : 'Logged to Sent inbox.',
     });
   } catch (error: any) {
     console.error('Campaign error:', error);
