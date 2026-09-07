@@ -45,7 +45,7 @@ export default function CampaignsPage() {
   const [sendAsHtml, setSendAsHtml] = useState(true);
   const [showPreview, setShowPreview] = useState(true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(500);
   const [sending, setSending] = useState(false);
   const [smtp, setSmtp] = useState<any>(null);
   const [result, setResult] = useState<any>(null);
@@ -103,6 +103,8 @@ export default function CampaignsPage() {
         throw new Error(sendAsHtml ? 'HTML body is required' : 'Plain text body is required');
       }
 
+      const safeLimit = Math.min(Math.max(Number(limit) || 1, 1), 500);
+
       const res = await fetch('/api/campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,11 +114,10 @@ export default function CampaignsPage() {
           subject,
           body: bodyToSend,
           html: sendAsHtml,
-          // also send both so server can prefer HTML + text multipart when both exist
           htmlBody: htmlBody.trim() || undefined,
           textBody: textBody.trim() || undefined,
           attachments,
-          limit,
+          limit: safeLimit,
           status: 'NEW',
           dryRun,
         }),
@@ -212,7 +213,6 @@ export default function CampaignsPage() {
             />
           </div>
 
-          {/* Send format + preview toggles */}
           <div className="flex flex-wrap items-center gap-4">
             <label className="inline-flex items-center gap-2 text-sm text-white/70">
               <input
@@ -242,7 +242,6 @@ export default function CampaignsPage() {
             </button>
           </div>
 
-          {/* Two-column: Plain text | HTML */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="label">Plain text body</label>
@@ -273,7 +272,6 @@ export default function CampaignsPage() {
             </div>
           </div>
 
-          {/* Toggleable live HTML preview */}
           {showPreview && (
             <div>
               <div className="mb-2 flex items-center justify-between">
@@ -326,11 +324,17 @@ export default function CampaignsPage() {
             <input
               type="number"
               min={1}
-              max={50}
+              max={500}
               className="input max-w-[160px]"
               value={limit}
-              onChange={(e) => setLimit(Number(e.target.value))}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setLimit(Number.isFinite(n) ? Math.min(Math.max(n, 1), 500) : 1);
+              }}
             />
+            <p className="mt-1.5 text-xs text-white/40">
+              Max 500 per run. Large batches may hit Vercel time limits — use smaller chunks if needed.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">

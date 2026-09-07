@@ -12,9 +12,11 @@ import {
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// Higher limit for larger batches (Vercel Pro allows up to 300s)
+export const maxDuration = 300;
 
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const MAX_RECIPIENTS = 500;
 
 type Recipient = {
   email: string;
@@ -92,6 +94,7 @@ export async function GET() {
     error,
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     user: process.env.SMTP_USER || process.env.GMAIL_USER || null,
+    maxRecipients: MAX_RECIPIENTS,
   });
 }
 
@@ -121,7 +124,10 @@ export async function POST(request: Request) {
     const dryRun = Boolean(body.dryRun);
     const mode = body.mode === 'leads' ? 'leads' : 'manual';
     const toRaw = String(body.to || body.recipients || '').trim();
-    const limit = Math.min(Math.max(Number(body.limit) || 25, 1), 40);
+    const limit = Math.min(
+      Math.max(Number(body.limit) || 500, 1),
+      MAX_RECIPIENTS
+    );
     const statusFilter = body.status || 'NEW';
     const attachments = normalizeAttachments(body.attachments);
     const unsubscribeUrl =
@@ -201,6 +207,7 @@ export async function POST(request: Request) {
         hasText: Boolean(textTemplate),
         attachmentCount: attachments.length,
         wouldSend: recipients.length,
+        limit,
         recipients: recipients.map((r) => ({
           email: r.email,
           name: r.name,
@@ -236,7 +243,6 @@ export async function POST(request: Request) {
           ? personalize(textTemplate, vars)
           : undefined;
 
-        // Prefer both parts when available (multipart/alternative)
         const html = preferHtml
           ? personalizedHtml || undefined
           : personalizedHtml && !personalizedText
@@ -293,10 +299,11 @@ export async function POST(request: Request) {
       sent,
       failed,
       total: recipients.length,
+      limit,
       sentTo,
       errors: errors.slice(0, 15),
       note:
-        'Paced sends (3–7s). Use both HTML + text. Set SMTP_FROM_NAME. Gmail free ~100–500/day.',
+        'Max 500/run. Paced sends. Gmail free ~100–500/day. Large batches may need Vercel Pro (300s) or smaller chunks.',
     });
   } catch (error: any) {
     console.error('Campaign error:', error);
