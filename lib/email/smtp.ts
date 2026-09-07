@@ -10,7 +10,6 @@ export type EmailAttachment = {
 };
 
 function randHex(bytes: number): string {
-  // Avoid hard crypto import issues on some serverless builds
   const alphabet = 'abcdef0123456789';
   let out = '';
   for (let i = 0; i < bytes * 2; i++) {
@@ -19,31 +18,85 @@ function randHex(bytes: number): string {
   return out;
 }
 
+/** Soften phrases that SpamAssassin / Gmail score heavily */
+function sanitizeSubject(subject: string): string {
+  let s = subject.trim();
+  if (s === s.toUpperCase() && s.length > 8) {
+    s = s.charAt(0) + s.slice(1).toLowerCase();
+  }
+  // Strip excessive punctuation / money spam patterns
+  s = s.replace(/!{2,}/g, '!');
+  s = s.replace(/\${2,}/g, '$');
+  return s.slice(0, 150);
+}
+
+function looksLikeSpammyHtml(html: string): boolean {
+  const lower = html.toLowerCase();
+  const bad = [
+    'click here now',
+    'act now',
+    'limited time offer',
+    'congratulations you won',
+    'viagra',
+    'crypto giveaway',
+  ];
+  return bad.some((b) => lower.includes(b));
+}
+
 export function getSmtpConfig() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
   const user = process.env.SMTP_USER || process.env.GMAIL_USER || '';
   const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '';
-  const fromEmail =
+
+  // Prefer company domain address when set (critical for SPF/DKIM alignment)
+  const fromEmail = (
     process.env.SMTP_FROM ||
     process.env.GMAIL_USER ||
     user ||
-    '';
-  // BIG OLD ALPS — use initials so recipients don't think mail is from a bot
+    ''
+  ).trim();
+
   const fromName = (
     process.env.SMTP_FROM_NAME ||
     process.env.FROM_NAME ||
     'BOA'
-  ).replace(/["\\]/g, '');
-  const replyTo =
+  )
+    .replace(/["\\]/g, '')
+    .trim();
+
+  const replyTo = (
     process.env.SMTP_REPLY_TO ||
     process.env.REPLY_TO ||
-    fromEmail;
+    fromEmail
+  ).trim();
+
+  // Envelope sender (Return-Path) — should match From domain for DMARC alignment
+  const envelopeFrom = (
+    process.env.SMTP_ENVELOPE_FROM ||
+    process.env.SMTP_RETURN_PATH ||
+    fromEmail
+  ).trim();
 
   const from =
     fromName && fromEmail ? `"${fromName}" <${fromEmail}>` : fromEmail;
 
-  return { host, port, user, pass, from, fromEmail, fromName, replyTo };
+  const domain = fromEmail.includes('@')
+    ? fromEmail.split('@')[1].toLowerCase()
+    : '';
+
+  return {
+    host,
+    port,
+    user,
+    pass,
+    from,
+    fromEmail,
+    fromName,
+    replyTo,
+    envelopeFrom,
+    domain,
+  };
 }
 
 export function isSmtpConfigured(): boolean {
@@ -58,7 +111,7 @@ export function getTransporter(): Transporter {
 
   if (!user || !pass) {
     throw new Error(
-      'SMTP not configured. Set SMTP_USER and SMTP_PASS (Gmail App Password) on Vercel.'
+      'SMTP not configured. Set SMTP_USER and SMTP_PASS on Vercel.'
     );
   }
 
@@ -70,6 +123,8 @@ export function getTransporter(): Transporter {
     tls: {
       rejectUnauthorized: process.env.SMTP_TLS_REJECT !== '0',
     },
+    // Helps some providers treat connection as modern client
+    name: process.env.SMTP_HELO || process.env.SMTP_HOSTNAME || undefined,
   });
 
   return transporter;
@@ -110,17 +165,14 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-function makeMessageId(fromEmail: string): string {
-  const domain = (fromEmail.split('@')[1] || 'localhost').toLowerCase();
-  return `<${randHex(12)}@${domain}>`;
+function makeMessageId(domain: string): string {
+  const d = domain || 'localhost';
+  return `<${randHex(16)}.${Date.now()}@${d}>`;
 }
 
 /**
- * Deliverability-focused send:
- * - multipart text + html
- * - named From + Reply-To
- * - List-Unsubscribe when configured
- * - Message-ID / Date / UTF-8
+ * Stronger deliverability defaults for BOA / company domain SMTP.
+ * DNS (SPF + DKIM + DMARC) still does most of the work — code alone cannot “bypass” filters.
  */
 export async function sendOneEmail(options: {
   to: string;
@@ -130,26 +182,35 @@ export async function sendOneEmail(options: {
   attachments?: EmailAttachment[];
   unsubscribeUrl?: string;
 }): Promise<{ messageId?: string }> {
-  const { from, fromEmail, replyTo } = getSmtpConfig();
+  const cfg = getSmtpConfig();
   const t = getTransporter();
 
-  const html =
+  // Always try to provide BOTH text + html (multipart/alternative)
+  let html =
     options.html ||
     (options.text
-      ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#111111">${options.text
+      ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#222222">${options.text
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;')
           .replace(/\n/g, '<br>')}</div>`
       : undefined);
 
-  const text =
-    options.text || (options.html ? stripHtml(options.html) : '') || ' ';
+  let text =
+    options.text || (options.html ? stripHtml(options.html) : '') || '.';
 
-  let subject = (options.subject || '').trim();
-  if (subject && subject === subject.toUpperCase() && subject.length > 8) {
-    subject = subject.charAt(0) + subject.slice(1).toLowerCase();
+  // Avoid empty or image-only bodies (high spam score)
+  if (html && stripHtml(html).length < 20) {
+    text = text.length > 5 ? text : 'Hello,\n\nPlease see this message.\n\nRegards,\nBOA';
   }
+
+  if (html && looksLikeSpammyHtml(html)) {
+    console.warn(
+      'Content may trigger spam filters (aggressive promo language detected)'
+    );
+  }
+
+  const subject = sanitizeSubject(options.subject || 'Hello');
 
   const attachments =
     options.attachments?.map((a) => ({
@@ -167,7 +228,10 @@ export async function sendOneEmail(options: {
     options.unsubscribeUrl || process.env.SMTP_UNSUBSCRIBE_URL || undefined;
 
   const headers: Record<string, string> = {
-    'X-Entity-Ref-ID': randHex(8),
+    // Unique ref without looking like a bulk ESP blast
+    'X-Entity-Ref-ID': randHex(12),
+    // Encourage transactional treatment where supported
+    'X-Auto-Response-Suppress': 'OOF, AutoReply',
   };
 
   if (unsubscribeUrl) {
@@ -175,18 +239,29 @@ export async function sendOneEmail(options: {
     headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
   }
 
+  // Optional List-Id for domain-owned mail
+  if (cfg.domain) {
+    headers['List-Id'] = `<outreach.${cfg.domain}>`;
+  }
+
   const info = await t.sendMail({
-    from,
+    from: cfg.from,
+    // Align Return-Path / envelope with From domain when possible
+    envelope: cfg.envelopeFrom
+      ? { from: cfg.envelopeFrom, to: options.to }
+      : undefined,
     to: options.to,
-    replyTo: replyTo || fromEmail,
+    replyTo: cfg.replyTo || cfg.fromEmail,
     subject,
     text,
     html,
     attachments,
-    messageId: makeMessageId(fromEmail || 'mail.local'),
+    messageId: makeMessageId(cfg.domain || 'mail.local'),
     date: new Date(),
     encoding: 'utf-8',
     headers,
+    // Priority normal — “high priority” is a spam signal
+    priority: 'normal',
   });
 
   return { messageId: info.messageId };
@@ -196,7 +271,7 @@ export const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 export function sendDelayMs(): number {
-  const base = parseInt(process.env.SMTP_SEND_DELAY_MS || '4000', 10);
-  const jitter = Math.floor(Math.random() * 3000);
-  return Math.max(2500, (Number.isFinite(base) ? base : 4000) + jitter);
+  const base = parseInt(process.env.SMTP_SEND_DELAY_MS || '5000', 10);
+  const jitter = Math.floor(Math.random() * 4000);
+  return Math.max(3000, (Number.isFinite(base) ? base : 5000) + jitter);
 }
