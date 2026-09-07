@@ -29,10 +29,11 @@ export function getSmtpConfig() {
     process.env.GMAIL_USER ||
     user ||
     '';
+  // BIG OLD ALPS — use initials so recipients don't think mail is from a bot
   const fromName = (
     process.env.SMTP_FROM_NAME ||
     process.env.FROM_NAME ||
-    'LeadBot'
+    'BOA'
   ).replace(/["\\]/g, '');
   const replyTo =
     process.env.SMTP_REPLY_TO ||
