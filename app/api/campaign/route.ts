@@ -108,8 +108,16 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const subjectTemplate = String(body.subject || '').trim();
-    const bodyTemplate = String(body.body || '').trim();
-    const isHtml = body.html !== false; // default HTML
+
+    // Prefer explicit htmlBody / textBody; fall back to legacy single "body"
+    const htmlTemplate = String(
+      body.htmlBody ?? (body.html !== false ? body.body : '') ?? ''
+    ).trim();
+    const textTemplate = String(
+      body.textBody ?? (body.html === false ? body.body : '') ?? ''
+    ).trim();
+
+    const preferHtml = body.html !== false;
     const dryRun = Boolean(body.dryRun);
     const mode = body.mode === 'leads' ? 'leads' : 'manual';
     const toRaw = String(body.to || body.recipients || '').trim();
@@ -117,9 +125,16 @@ export async function POST(request: Request) {
     const statusFilter = body.status || 'NEW';
     const attachments = normalizeAttachments(body.attachments);
 
-    if (!subjectTemplate || !bodyTemplate) {
+    if (!subjectTemplate) {
       return NextResponse.json(
-        { error: 'subject and body are required' },
+        { error: 'subject is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!htmlTemplate && !textTemplate) {
+      return NextResponse.json(
+        { error: 'Provide at least htmlBody or textBody (or body)' },
         { status: 400 }
       );
     }
@@ -177,7 +192,9 @@ export async function POST(request: Request) {
         success: true,
         dryRun: true,
         mode,
-        html: isHtml,
+        preferHtml,
+        hasHtml: Boolean(htmlTemplate),
+        hasText: Boolean(textTemplate),
         attachmentCount: attachments.length,
         wouldSend: recipients.length,
         recipients: recipients.map((r) => ({
@@ -207,13 +224,30 @@ export async function POST(request: Request) {
           title: r.title,
         };
 
-        const personalizedBody = personalize(bodyTemplate, vars);
+        const personalizedHtml = htmlTemplate
+          ? personalize(htmlTemplate, vars)
+          : undefined;
+        const personalizedText = textTemplate
+          ? personalize(textTemplate, vars)
+          : undefined;
+
+        // When preferHtml is true and we have HTML, send multipart (html + text).
+        // When preferHtml is false, send text only (or HTML only if no text).
+        const html =
+          preferHtml && personalizedHtml
+            ? personalizedHtml
+            : !preferHtml && !personalizedText
+              ? personalizedHtml
+              : undefined;
+        const text =
+          personalizedText ||
+          (!preferHtml ? personalizedHtml : undefined);
 
         await sendOneEmail({
           to: r.email,
           subject: personalize(subjectTemplate, vars),
-          html: isHtml ? personalizedBody : undefined,
-          text: isHtml ? undefined : personalizedBody,
+          html,
+          text,
           attachments,
         });
 
@@ -241,7 +275,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       mode,
-      html: isHtml,
+      preferHtml,
+      hasHtml: Boolean(htmlTemplate),
+      hasText: Boolean(textTemplate),
       attachmentCount: attachments.length,
       sent,
       failed,

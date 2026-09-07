@@ -18,8 +18,18 @@ const DEFAULT_HTML = [
   '</div>',
 ].join('');
 
-function fillPreview(html: string) {
-  return html
+const DEFAULT_TEXT = [
+  'Hi {{name}},',
+  '',
+  'I came across {{company}} and wanted to share a quick idea.',
+  '',
+  'Happy to send a short overview if useful.',
+  '',
+  'Best regards',
+].join('\n');
+
+function fillTokens(template: string) {
+  return template
     .split('{{name}}').join('Alex')
     .split('{{company}}').join('Acme')
     .split('{{email}}').join('alex@acme.com')
@@ -30,8 +40,10 @@ export default function CampaignsPage() {
   const [mode, setMode] = useState<'manual' | 'leads'>('manual');
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('Quick idea for {{company}}');
-  const [body, setBody] = useState(DEFAULT_HTML);
-  const [isHtml, setIsHtml] = useState(true);
+  const [htmlBody, setHtmlBody] = useState(DEFAULT_HTML);
+  const [textBody, setTextBody] = useState(DEFAULT_TEXT);
+  const [sendAsHtml, setSendAsHtml] = useState(true);
+  const [showPreview, setShowPreview] = useState(true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [limit, setLimit] = useState(20);
   const [sending, setSending] = useState(false);
@@ -86,6 +98,11 @@ export default function CampaignsPage() {
         throw new Error('Add at least one email in the To field');
       }
 
+      const bodyToSend = sendAsHtml ? htmlBody : textBody;
+      if (!bodyToSend.trim()) {
+        throw new Error(sendAsHtml ? 'HTML body is required' : 'Plain text body is required');
+      }
+
       const res = await fetch('/api/campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -93,8 +110,11 @@ export default function CampaignsPage() {
           mode,
           to: mode === 'manual' ? to : undefined,
           subject,
-          body,
-          html: isHtml,
+          body: bodyToSend,
+          html: sendAsHtml,
+          // also send both so server can prefer HTML + text multipart when both exist
+          htmlBody: htmlBody.trim() || undefined,
+          textBody: textBody.trim() || undefined,
           attachments,
           limit,
           status: 'NEW',
@@ -116,7 +136,7 @@ export default function CampaignsPage() {
       <div className="page-header">
         <h1 className="page-title">Campaigns</h1>
         <p className="page-subtitle">
-          HTML templates, attachments, multi-recipient Gmail SMTP
+          Separate HTML + plain text, live preview, attachments, Gmail SMTP
         </p>
       </div>
 
@@ -170,7 +190,7 @@ export default function CampaignsPage() {
                 To ({parsedCount} addresses)
               </label>
               <textarea
-                className="input min-h-[120px] resize-y font-mono text-sm"
+                className="input min-h-[100px] resize-y font-mono text-sm"
                 placeholder={'one@example.com\ntwo@example.com'}
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
@@ -192,48 +212,81 @@ export default function CampaignsPage() {
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Send format + preview toggles */}
+          <div className="flex flex-wrap items-center gap-4">
             <label className="inline-flex items-center gap-2 text-sm text-white/70">
               <input
                 type="checkbox"
-                checked={isHtml}
-                onChange={(e) => setIsHtml(e.target.checked)}
+                checked={sendAsHtml}
+                onChange={(e) => setSendAsHtml(e.target.checked)}
               />
-              Send as HTML template
+              Prefer HTML when sending
             </label>
-            {isHtml ? (
-              <button
-                type="button"
-                className="btn-ghost text-xs"
-                onClick={() => setBody(DEFAULT_HTML)}
-              >
-                Load sample template
-              </button>
-            ) : null}
+            <label className="inline-flex items-center gap-2 text-sm text-white/70">
+              <input
+                type="checkbox"
+                checked={showPreview}
+                onChange={(e) => setShowPreview(e.target.checked)}
+              />
+              Show HTML preview
+            </label>
+            <button
+              type="button"
+              className="btn-ghost text-xs"
+              onClick={() => {
+                setHtmlBody(DEFAULT_HTML);
+                setTextBody(DEFAULT_TEXT);
+              }}
+            >
+              Load sample templates
+            </button>
           </div>
 
-          <div>
-            <label className="label">{isHtml ? 'HTML body' : 'Plain text body'}</label>
-            <textarea
-              className="input min-h-[220px] resize-y font-mono text-xs"
-              rows={12}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-            <p className="mt-1.5 text-xs text-white/40">
-              Tokens: name, company, email, title (wrap with double braces)
-            </p>
-          </div>
-
-          {isHtml ? (
+          {/* Two-column: Plain text | HTML */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="label">Preview</label>
+              <label className="label">Plain text body</label>
+              <textarea
+                className="input min-h-[240px] resize-y font-mono text-xs"
+                rows={14}
+                value={textBody}
+                onChange={(e) => setTextBody(e.target.value)}
+                placeholder="Plain text version of the email..."
+              />
+              <p className="mt-1.5 text-xs text-white/40">
+                Used as fallback / when HTML is off. Tokens: {'{{name}}'}, {'{{company}}'}, {'{{email}}'}, {'{{title}}'}
+              </p>
+            </div>
+
+            <div>
+              <label className="label">HTML body</label>
+              <textarea
+                className="input min-h-[240px] resize-y font-mono text-xs"
+                rows={14}
+                value={htmlBody}
+                onChange={(e) => setHtmlBody(e.target.value)}
+                placeholder="<div>HTML email...</div>"
+              />
+              <p className="mt-1.5 text-xs text-white/40">
+                Inline CSS recommended. Same tokens work inside HTML.
+              </p>
+            </div>
+          </div>
+
+          {/* Toggleable live HTML preview */}
+          {showPreview && (
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="label mb-0">HTML preview</label>
+                <span className="text-xs text-white/40">Sample: Alex @ Acme</span>
+              </div>
               <div
-                className="overflow-hidden rounded-xl border border-white/10 bg-black/30 p-3"
-                dangerouslySetInnerHTML={{ __html: fillPreview(body) }}
+                className="overflow-auto rounded-xl border border-white/10 bg-black/40 p-4"
+                style={{ minHeight: 160, maxHeight: 420 }}
+                dangerouslySetInnerHTML={{ __html: fillTokens(htmlBody) }}
               />
             </div>
-          ) : null}
+          )}
 
           <div>
             <label className="label">Attachments (max 5, 4MB each)</label>
@@ -316,18 +369,27 @@ export default function CampaignsPage() {
 
         <div className="space-y-4">
           <div className="card p-5">
+            <h3 className="text-sm font-semibold text-white">How it works</h3>
+            <ul className="mt-3 space-y-2 text-sm text-white/55">
+              <li>Left: plain text body</li>
+              <li>Right: HTML body (side-by-side)</li>
+              <li>Toggle "Show HTML preview" for live render</li>
+              <li>"Prefer HTML" decides which version is primary</li>
+            </ul>
+          </div>
+          <div className="card p-5">
             <h3 className="text-sm font-semibold text-white">HTML tips</h3>
             <ul className="mt-3 space-y-2 text-sm text-white/55">
               <li>Use inline CSS for email clients</li>
-              <li>Keep width around 560 to 600px</li>
-              <li>Tokens work inside HTML too</li>
+              <li>Keep width around 560–600px</li>
+              <li>Tokens work in both text and HTML</li>
             </ul>
           </div>
           <div className="card p-5">
             <h3 className="text-sm font-semibold text-white">Files</h3>
             <ul className="mt-3 space-y-2 text-sm text-white/55">
               <li>PDF, images, docs supported</li>
-              <li>Total payload under about 8MB</li>
+              <li>Total payload under ~8MB</li>
               <li>Same files go to every recipient</li>
             </ul>
           </div>
