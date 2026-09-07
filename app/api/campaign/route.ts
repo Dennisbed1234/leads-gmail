@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import {
-  delay,
   isSmtpConfigured,
   personalize,
+  sendDelayMs,
   sendOneEmail,
   verifySmtpConnection,
+  delay,
   type EmailAttachment,
 } from '@/lib/email/smtp';
 
@@ -65,7 +66,6 @@ function normalizeAttachments(raw: unknown): EmailAttachment[] {
       ? String((item as any).contentType)
       : undefined;
     if (!filename || !content) continue;
-    // Strip data URL prefix if present
     if (content.includes('base64,')) {
       content = content.split('base64,')[1] || content;
     }
@@ -109,7 +109,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const subjectTemplate = String(body.subject || '').trim();
 
-    // Prefer explicit htmlBody / textBody; fall back to legacy single "body"
     const htmlTemplate = String(
       body.htmlBody ?? (body.html !== false ? body.body : '') ?? ''
     ).trim();
@@ -121,9 +120,14 @@ export async function POST(request: Request) {
     const dryRun = Boolean(body.dryRun);
     const mode = body.mode === 'leads' ? 'leads' : 'manual';
     const toRaw = String(body.to || body.recipients || '').trim();
-    const limit = Math.min(Math.max(Number(body.limit) || 50, 1), 50);
+    // Cap lower for deliverability (Gmail free ~100–500/day; rapid bursts hurt reputation)
+    const limit = Math.min(Math.max(Number(body.limit) || 25, 1), 40);
     const statusFilter = body.status || 'NEW';
     const attachments = normalizeAttachments(body.attachments);
+    const unsubscribeUrl =
+      typeof body.unsubscribeUrl === 'string'
+        ? body.unsubscribeUrl.trim()
+        : undefined;
 
     if (!subjectTemplate) {
       return NextResponse.json(
@@ -215,7 +219,8 @@ export async function POST(request: Request) {
     const errors: string[] = [];
     const sentTo: string[] = [];
 
-    for (const r of recipients) {
+    for (let i = 0; i < recipients.length; i++) {
+      const r = recipients[i];
       try {
         const vars = {
           name: r.name,
@@ -231,24 +236,24 @@ export async function POST(request: Request) {
           ? personalize(textTemplate, vars)
           : undefined;
 
-        // When preferHtml is true and we have HTML, send multipart (html + text).
-        // When preferHtml is false, send text only (or HTML only if no text).
+        // Always try to send both parts when available (best for filters)
         const html =
           preferHtml && personalizedHtml
             ? personalizedHtml
             : !preferHtml && !personalizedText
               ? personalizedHtml
-              : undefined;
+              : personalizedHtml;
         const text =
           personalizedText ||
-          (!preferHtml ? personalizedHtml : undefined);
+          (personalizedHtml ? undefined : personalizedText);
 
         await sendOneEmail({
           to: r.email,
           subject: personalize(subjectTemplate, vars),
-          html,
-          text,
+          html: html || undefined,
+          text: text || undefined,
           attachments,
+          unsubscribeUrl,
         });
 
         sent += 1;
@@ -265,10 +270,17 @@ export async function POST(request: Request) {
           }
         }
 
-        await delay(2000);
+        // Jittered pause between sends (skip after last)
+        if (i < recipients.length - 1) {
+          await delay(sendDelayMs());
+        }
       } catch (e: any) {
         failed += 1;
         errors.push(`${r.email}: ${e?.message || 'send failed'}`);
+        // Still pause on failure to avoid hammering
+        if (i < recipients.length - 1) {
+          await delay(sendDelayMs());
+        }
       }
     }
 
@@ -284,7 +296,8 @@ export async function POST(request: Request) {
       total: recipients.length,
       sentTo,
       errors: errors.slice(0, 15),
-      note: 'Gmail free accounts have daily send limits (~100–500).',
+      note:
+        'Paced sends (3–7s gap). Fill both HTML + plain text. Set SMTP_FROM_NAME. Gmail free ~100–500/day.',
     });
   } catch (error: any) {
     console.error('Campaign error:', error);
