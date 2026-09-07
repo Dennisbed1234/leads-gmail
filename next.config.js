@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Avoid build failures from non-blocking TS/ESLint issues while iterating
   typescript: {
-    // Keep shipping while we iterate; real syntax errors still fail the build
     ignoreBuildErrors: true,
   },
   eslint: {

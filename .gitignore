@@ -32,7 +32,7 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+# Keep next-env.d.ts in repo so Vercel/CI always has types
 
 # prisma
 prisma/*.db
