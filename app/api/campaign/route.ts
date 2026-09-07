@@ -11,6 +11,7 @@ import {
 } from '@/lib/email/smtp';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
@@ -120,7 +121,6 @@ export async function POST(request: Request) {
     const dryRun = Boolean(body.dryRun);
     const mode = body.mode === 'leads' ? 'leads' : 'manual';
     const toRaw = String(body.to || body.recipients || '').trim();
-    // Cap lower for deliverability (Gmail free ~100–500/day; rapid bursts hurt reputation)
     const limit = Math.min(Math.max(Number(body.limit) || 25, 1), 40);
     const statusFilter = body.status || 'NEW';
     const attachments = normalizeAttachments(body.attachments);
@@ -236,16 +236,17 @@ export async function POST(request: Request) {
           ? personalize(textTemplate, vars)
           : undefined;
 
-        // Always try to send both parts when available (best for filters)
-        const html =
-          preferHtml && personalizedHtml
+        // Prefer both parts when available (multipart/alternative)
+        const html = preferHtml
+          ? personalizedHtml || undefined
+          : personalizedHtml && !personalizedText
             ? personalizedHtml
-            : !preferHtml && !personalizedText
-              ? personalizedHtml
-              : personalizedHtml;
+            : personalizedHtml || undefined;
+
         const text =
           personalizedText ||
-          (personalizedHtml ? undefined : personalizedText);
+          (personalizedHtml ? undefined : personalizedText) ||
+          undefined;
 
         await sendOneEmail({
           to: r.email,
@@ -270,14 +271,12 @@ export async function POST(request: Request) {
           }
         }
 
-        // Jittered pause between sends (skip after last)
         if (i < recipients.length - 1) {
           await delay(sendDelayMs());
         }
       } catch (e: any) {
         failed += 1;
         errors.push(`${r.email}: ${e?.message || 'send failed'}`);
-        // Still pause on failure to avoid hammering
         if (i < recipients.length - 1) {
           await delay(sendDelayMs());
         }
@@ -297,7 +296,7 @@ export async function POST(request: Request) {
       sentTo,
       errors: errors.slice(0, 15),
       note:
-        'Paced sends (3–7s gap). Fill both HTML + plain text. Set SMTP_FROM_NAME. Gmail free ~100–500/day.',
+        'Paced sends (3–7s). Use both HTML + text. Set SMTP_FROM_NAME. Gmail free ~100–500/day.',
     });
   } catch (error: any) {
     console.error('Campaign error:', error);
