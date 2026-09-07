@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const nav = [
   { name: 'Dashboard', href: '/', icon: IconDashboard },
   { name: 'Extract Leads', href: '/extract', icon: IconSearch },
+  { name: 'Email Extractor', href: '/email-extract', icon: IconExtract },
   { name: 'Enrich', href: '/enrich', icon: IconSpark },
   { name: 'Verify', href: '/verify', icon: IconCheck },
   { name: 'Leads', href: '/leads', icon: IconUsers },
@@ -119,6 +120,16 @@ function IconSearch({ active }: { active?: boolean }) {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <circle cx="11" cy="11" r="7" />
       <path d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+}
+
+function IconExtract({ active }: { active?: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M9 15l2 2 4-4" />
     </svg>
   );
 }
