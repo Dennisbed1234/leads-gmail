@@ -28,7 +28,6 @@ function sanitizeSubject(subject: string): string {
   return s.slice(0, 150);
 }
 
-/** Bare email only */
 function extractEmail(raw: string): string {
   const s = (raw || '').trim();
   if (!s) return '';
@@ -39,14 +38,12 @@ function extractEmail(raw: string): string {
   return s.includes('@') ? s.toLowerCase() : '';
 }
 
-/** Display name only — no < > " or email fragments (fixes BOA>) */
-function cleanDisplayName(raw: string, fallback = 'BOA'): string {
+function cleanDisplayName(raw: string, fallback = 'CHASE'): string {
   let s = (raw || '').trim();
   if (!s) return fallback;
   s = s.replace(/[<>"']/g, '');
   s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '');
   s = s.replace(/\s+/g, ' ').trim();
-  // Trailing/leading punctuation leftovers from bad env like BOA>
   s = s.replace(/^[\s:>\-]+|[\s:<>\-]+$/g, '').trim();
   if (!s || s.length > 40) return fallback;
   return s;
@@ -65,9 +62,10 @@ export function getSmtpConfig() {
       process.env.SMTP_FROM || process.env.GMAIL_USER || user || ''
     ) || user;
 
+  // Chase Global — display as CHASE
   const fromName = cleanDisplayName(
-    process.env.SMTP_FROM_NAME || process.env.FROM_NAME || 'BOA',
-    'BOA'
+    process.env.SMTP_FROM_NAME || process.env.FROM_NAME || 'CHASE',
+    'CHASE'
   );
 
   const replyTo =
@@ -78,7 +76,6 @@ export function getSmtpConfig() {
     process.env.SMTP_ENVELOPE_FROM || process.env.SMTP_RETURN_PATH || ''
   );
 
-  // Nodemailer object form avoids accidental BOA> in the header string
   const from =
     fromName && fromEmail
       ? { name: fromName, address: fromEmail }
@@ -245,7 +242,7 @@ export async function sendOneEmail(options: {
     text =
       text.length > 5
         ? text
-        : 'Hello,\n\nPlease see this message.\n\nRegards,\nBOA';
+        : 'Hello,\n\nPlease see this message.\n\nRegards,\nCHASE';
   }
 
   const subject = sanitizeSubject(options.subject || 'Hello');
