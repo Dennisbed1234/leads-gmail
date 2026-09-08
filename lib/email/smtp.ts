@@ -28,43 +28,61 @@ function sanitizeSubject(subject: string): string {
   return s.slice(0, 150);
 }
 
+/** Bare email only */
+function extractEmail(raw: string): string {
+  const s = (raw || '').trim();
+  if (!s) return '';
+  const angle = s.match(/<([^>]+@[^>]+)>/);
+  if (angle) return angle[1].trim().toLowerCase();
+  const plain = s.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+  if (plain) return plain[0].toLowerCase();
+  return s.includes('@') ? s.toLowerCase() : '';
+}
+
+/** Display name only — no < > " or email fragments (fixes BOA>) */
+function cleanDisplayName(raw: string, fallback = 'BOA'): string {
+  let s = (raw || '').trim();
+  if (!s) return fallback;
+  s = s.replace(/[<>"']/g, '');
+  s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '');
+  s = s.replace(/\s+/g, ' ').trim();
+  // Trailing/leading punctuation leftovers from bad env like BOA>
+  s = s.replace(/^[\s:>\-]+|[\s:<>\-]+$/g, '').trim();
+  if (!s || s.length > 40) return fallback;
+  return s;
+}
+
 export function getSmtpConfig() {
   const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
-  const user = (process.env.SMTP_USER || process.env.GMAIL_USER || '').trim();
+  const user = extractEmail(
+    process.env.SMTP_USER || process.env.GMAIL_USER || ''
+  );
   const pass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '').trim();
 
-  const fromEmail = (
-    process.env.SMTP_FROM ||
-    process.env.GMAIL_USER ||
-    user ||
-    ''
-  ).trim();
+  let fromEmail =
+    extractEmail(
+      process.env.SMTP_FROM || process.env.GMAIL_USER || user || ''
+    ) || user;
 
-  const fromName = (
-    process.env.SMTP_FROM_NAME ||
-    process.env.FROM_NAME ||
+  const fromName = cleanDisplayName(
+    process.env.SMTP_FROM_NAME || process.env.FROM_NAME || 'BOA',
     'BOA'
-  )
-    .replace(/["\\]/g, '')
-    .trim();
+  );
 
-  const replyTo = (
-    process.env.SMTP_REPLY_TO ||
-    process.env.REPLY_TO ||
-    fromEmail
-  ).trim();
+  const replyTo =
+    extractEmail(process.env.SMTP_REPLY_TO || process.env.REPLY_TO || '') ||
+    fromEmail;
 
-  // Only use custom envelope when explicitly set.
-  // Defaulting envelope to a different domain than SMTP_USER breaks Gmail (550 / rejected).
-  const envelopeFrom = (
-    process.env.SMTP_ENVELOPE_FROM ||
-    process.env.SMTP_RETURN_PATH ||
-    ''
-  ).trim();
+  const envelopeFrom = extractEmail(
+    process.env.SMTP_ENVELOPE_FROM || process.env.SMTP_RETURN_PATH || ''
+  );
 
+  // Nodemailer object form avoids accidental BOA> in the header string
   const from =
-    fromName && fromEmail ? `"${fromName}" <${fromEmail}>` : fromEmail;
+    fromName && fromEmail
+      ? { name: fromName, address: fromEmail }
+      : fromEmail;
 
   const domain = fromEmail.includes('@')
     ? fromEmail.split('@')[1].toLowerCase()
@@ -96,7 +114,6 @@ export function isSmtpConfigured(): boolean {
   return Boolean(user && pass);
 }
 
-/** Force recreate transporter (after env change or auth errors) */
 export function resetTransporter() {
   transporter = null;
 }
@@ -157,7 +174,7 @@ function formatSmtpError(e: any): string {
       'enable 2FA, set SMTP_USER to the full Gmail address and SMTP_PASS to the 16-char App Password.'
     );
   }
-  if (/Daily.*limit|rate|421|450|452/i.test(raw)) {
+  if (/Daily.*limit|User-rate limit|421-4\.7\.0|421 4\.7\.0/i.test(raw)) {
     return 'SMTP rate/limit error from provider. Wait and send smaller batches.';
   }
   if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ESOCKET/i.test(raw) || code === 'ESOCKET') {
@@ -167,7 +184,6 @@ function formatSmtpError(e: any): string {
     return (
       'Provider rejected the From/envelope address. ' +
       'With Gmail, SMTP_FROM must be the same Gmail account (or an alias on that account). ' +
-      'Do not set SMTP_ENVELOPE_FROM to a different domain unless your SMTP host allows it. ' +
       `Detail: ${raw.slice(0, 200)}`
     );
   }
@@ -211,18 +227,6 @@ export async function sendOneEmail(options: {
 }): Promise<{ messageId?: string }> {
   const cfg = getSmtpConfig();
   const t = getTransporter();
-
-  // Gmail: From address should match authenticated user (or configured send-as alias)
-  if (cfg.isGmail && cfg.fromEmail && cfg.user) {
-    const fromLower = cfg.fromEmail.toLowerCase();
-    const userLower = cfg.user.toLowerCase();
-    if (fromLower !== userLower && !fromLower.endsWith('@gmail.com')) {
-      // Allow gmail aliases on same account; warn on totally different domains
-      console.warn(
-        `SMTP_FROM (${cfg.fromEmail}) differs from SMTP_USER (${cfg.user}). Gmail may reject.`
-      );
-    }
-  }
 
   let html =
     options.html ||
@@ -270,8 +274,6 @@ export async function sendOneEmail(options: {
     headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
   }
 
-  // Envelope: only if explicitly configured AND safe
-  // Gmail rejects MAIL FROM that is not the authenticated account
   let envelope: { from: string; to: string } | undefined;
   if (cfg.envelopeFrom) {
     if (cfg.isGmail) {
@@ -280,7 +282,6 @@ export async function sendOneEmail(options: {
       if (envLower === userLower || envLower.endsWith('@gmail.com')) {
         envelope = { from: cfg.envelopeFrom, to: options.to };
       }
-      // else skip envelope — let nodemailer use auth user
     } else {
       envelope = { from: cfg.envelopeFrom, to: options.to };
     }
@@ -305,7 +306,6 @@ export async function sendOneEmail(options: {
 
     return { messageId: info.messageId };
   } catch (e: any) {
-    // Auth errors: drop cached transporter so next try re-auths
     if (/EAUTH|Invalid login|535/i.test(String(e?.message || e?.code || ''))) {
       resetTransporter();
     }
