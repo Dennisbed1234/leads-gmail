@@ -1,15 +1,49 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { ensureSentEmailTable } from '@/lib/db/ensure-sent-email';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+function isMissingTableError(error: any): boolean {
+  const msg = String(error?.message || error || '');
+  return (
+    /sentEmail/i.test(msg) ||
+    /SentEmail/i.test(msg) ||
+    /does not exist/i.test(msg) ||
+    /P2021/i.test(msg)
+  );
+}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status'); // SENT | FAILED | all
     const q = (searchParams.get('q') || '').trim().toLowerCase();
-    const take = Math.min(Math.max(Number(searchParams.get('limit')) || 100, 1), 500);
+    const take = Math.min(
+      Math.max(Number(searchParams.get('limit')) || 100, 1),
+      500
+    );
+    const setup = searchParams.get('setup') === '1';
+
+    if (setup) {
+      const result = await ensureSentEmailTable();
+      if (!result.ok) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: result.error || 'Could not create SentEmail table',
+            hint: 'Check DATABASE_URL on Vercel points to your Neon/Postgres DB.',
+          },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        setup: true,
+        message: 'SentEmail table is ready.',
+      });
+    }
 
     const where: any = {};
     if (status === 'SENT' || status === 'FAILED') {
@@ -23,39 +57,95 @@ export async function GET(request: Request) {
       ];
     }
 
-    const [items, total, sentCount, failedCount] = await Promise.all([
-      prisma.sentEmail.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take,
-      }),
-      prisma.sentEmail.count({ where }),
-      prisma.sentEmail.count({ where: { status: 'SENT' } }),
-      prisma.sentEmail.count({ where: { status: 'FAILED' } }),
-    ]);
+    try {
+      const [items, total, sentCount, failedCount] = await Promise.all([
+        prisma.sentEmail.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take,
+        }),
+        prisma.sentEmail.count({ where }),
+        prisma.sentEmail.count({ where: { status: 'SENT' } }),
+        prisma.sentEmail.count({ where: { status: 'FAILED' } }),
+      ]);
 
-    return NextResponse.json({
-      success: true,
-      total,
-      sentCount,
-      failedCount,
-      items,
-    });
-  } catch (error: any) {
-    console.error('Inbox list error:', error);
-    // Schema may not be pushed yet
-    const msg = error?.message || 'Failed to load inbox';
-    if (String(msg).includes('sentEmail') || String(msg).includes('does not exist')) {
       return NextResponse.json({
         success: true,
-        total: 0,
-        sentCount: 0,
-        failedCount: 0,
-        items: [],
-        note: 'Run prisma db push so the SentEmail table exists.',
+        total,
+        sentCount,
+        failedCount,
+        items,
+      });
+    } catch (inner: any) {
+      if (!isMissingTableError(inner)) throw inner;
+
+      // Auto-create table once, then retry
+      const ensured = await ensureSentEmailTable();
+      if (!ensured.ok) {
+        return NextResponse.json({
+          success: true,
+          total: 0,
+          sentCount: 0,
+          failedCount: 0,
+          items: [],
+          needsSetup: true,
+          note:
+            'SentEmail table is missing. Tap “Create table” below, or check DATABASE_URL.',
+          setupError: ensured.error,
+        });
+      }
+
+      const [items, total, sentCount, failedCount] = await Promise.all([
+        prisma.sentEmail.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take,
+        }),
+        prisma.sentEmail.count({ where }),
+        prisma.sentEmail.count({ where: { status: 'SENT' } }),
+        prisma.sentEmail.count({ where: { status: 'FAILED' } }),
+      ]);
+
+      return NextResponse.json({
+        success: true,
+        total,
+        sentCount,
+        failedCount,
+        items,
+        note: 'SentEmail table was created automatically.',
       });
     }
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch (error: any) {
+    console.error('Inbox list error:', error);
+    return NextResponse.json(
+      { error: error?.message || 'Failed to load inbox' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    if (body.setup || body.createTable) {
+      const result = await ensureSentEmailTable();
+      if (!result.ok) {
+        return NextResponse.json(
+          { error: result.error || 'Create table failed' },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        message: 'SentEmail table is ready. Refresh inbox.',
+      });
+    }
+    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error?.message || 'Setup failed' },
+      { status: 500 }
+    );
   }
 }
 
@@ -77,6 +167,13 @@ export async function DELETE(request: Request) {
     await prisma.sentEmail.delete({ where: { id } });
     return NextResponse.json({ success: true, deleted: id });
   } catch (error: any) {
+    if (isMissingTableError(error)) {
+      await ensureSentEmailTable();
+      return NextResponse.json({
+        success: true,
+        message: 'Table created; nothing to delete yet.',
+      });
+    }
     return NextResponse.json(
       { error: error?.message || 'Delete failed' },
       { status: 500 }

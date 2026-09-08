@@ -26,6 +26,8 @@ export default function InboxPage() {
   const [stats, setStats] = useState({ total: 0, sentCount: 0, failedCount: 0 });
   const [selected, setSelected] = useState<SentItem | null>(null);
   const [note, setNote] = useState('');
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [setupLoading, setSetupLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,6 +48,7 @@ export default function InboxPage() {
         failedCount: data.failedCount || 0,
       });
       setNote(data.note || '');
+      setNeedsSetup(Boolean(data.needsSetup));
     } catch (e: any) {
       setError(e.message || 'Failed to load inbox');
     } finally {
@@ -56,6 +59,27 @@ export default function InboxPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const createTable = async () => {
+    setSetupLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/inbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setup: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Create table failed');
+      setNeedsSetup(false);
+      setNote(data.message || 'Table ready');
+      await load();
+    } catch (e: any) {
+      setError(e.message || 'Create table failed');
+    } finally {
+      setSetupLoading(false);
+    }
+  };
 
   const removeOne = async (id: string) => {
     try {
@@ -147,6 +171,22 @@ export default function InboxPage() {
       {note ? (
         <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
           {note}
+        </div>
+      ) : null}
+
+      {needsSetup ? (
+        <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-50">
+          <p className="mb-3">
+            Database table for Sent inbox is missing. Create it once:
+          </p>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={setupLoading}
+            onClick={createTable}
+          >
+            {setupLoading ? 'Creating table…' : 'Create SentEmail table'}
+          </button>
         </div>
       ) : null}
 
