@@ -38,7 +38,7 @@ function extractEmail(raw: string): string {
   return s.includes('@') ? s.toLowerCase() : '';
 }
 
-function cleanDisplayName(raw: string, fallback = 'CHASE'): string {
+function cleanDisplayName(raw: string, fallback = 'CCU'): string {
   let s = (raw || '').trim();
   if (!s) return fallback;
   s = s.replace(/[<>"']/g, '');
@@ -62,10 +62,10 @@ export function getSmtpConfig() {
       process.env.SMTP_FROM || process.env.GMAIL_USER || user || ''
     ) || user;
 
-  // Chase Global — display as CHASE
+  // Display name for leads-gmail campaigns
   const fromName = cleanDisplayName(
-    process.env.SMTP_FROM_NAME || process.env.FROM_NAME || 'CHASE',
-    'CHASE'
+    process.env.SMTP_FROM_NAME || process.env.FROM_NAME || 'CCU',
+    'CCU'
   );
 
   const replyTo =
@@ -242,7 +242,7 @@ export async function sendOneEmail(options: {
     text =
       text.length > 5
         ? text
-        : 'Hello,\n\nPlease see this message.\n\nRegards,\nCHASE';
+        : 'Hello,\n\nPlease see this message.\n\nRegards,\nCCU';
   }
 
   const subject = sanitizeSubject(options.subject || 'Hello');
