@@ -38,9 +38,17 @@ function extractEmail(raw: string): string {
   return s.includes('@') ? s.toLowerCase() : '';
 }
 
-function cleanDisplayName(raw: string, fallback = 'CCU'): string {
+/** Prefer explicit display name; also parse "Name <email>" from SMTP_FROM / MAIL_FROM. */
+function cleanDisplayName(raw: string, fallback = 'CryptoByt'): string {
   let s = (raw || '').trim();
   if (!s) return fallback;
+
+  // "Display Name <addr@domain>" → use the name part
+  const named = s.match(/^(.+?)\s*<[^>]+>$/);
+  if (named) {
+    s = named[1].trim();
+  }
+
   s = s.replace(/[<>"']/g, '');
   s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '');
   s = s.replace(/\s+/g, ' ').trim();
@@ -57,15 +65,25 @@ export function getSmtpConfig() {
   );
   const pass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '').trim();
 
-  let fromEmail =
-    extractEmail(
-      process.env.SMTP_FROM || process.env.GMAIL_USER || user || ''
-    ) || user;
+  const fromRaw =
+    process.env.SMTP_FROM ||
+    process.env.MAIL_FROM ||
+    process.env.EMAIL_FROM ||
+    process.env.GMAIL_USER ||
+    user ||
+    '';
 
-  // Display name for leads-gmail campaigns
+  let fromEmail = extractEmail(fromRaw) || user;
+
+  // Display name: SMTP_FROM_NAME / FROM_NAME, else name part of SMTP_FROM/MAIL_FROM, else CryptoByt
   const fromName = cleanDisplayName(
-    process.env.SMTP_FROM_NAME || process.env.FROM_NAME || 'CCU',
-    'CCU'
+    process.env.SMTP_FROM_NAME ||
+      process.env.FROM_NAME ||
+      process.env.MAIL_FROM ||
+      process.env.SMTP_FROM ||
+      process.env.EMAIL_FROM ||
+      'CryptoByt',
+    'CryptoByt'
   );
 
   const replyTo =
@@ -242,7 +260,7 @@ export async function sendOneEmail(options: {
     text =
       text.length > 5
         ? text
-        : 'Hello,\n\nPlease see this message.\n\nRegards,\nCCU';
+        : `Hello,\n\nPlease see this message.\n\nRegards,\n${cfg.fromName || 'CryptoByt'}`;
   }
 
   const subject = sanitizeSubject(options.subject || 'Hello');

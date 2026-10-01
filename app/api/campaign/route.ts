@@ -109,7 +109,7 @@ async function logSent(data: {
         error: data.error || null,
         mode: data.mode || null,
         isHtml: data.isHtml !== false,
-        fromName: fromName || 'BOA',
+        fromName: fromName || 'CryptoByt',
       },
     });
   } catch (e) {
