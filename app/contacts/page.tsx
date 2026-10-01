@@ -74,7 +74,7 @@ export default function ContactsPage() {
   const [sessionSent, setSessionSent] = useState<Set<string>>(new Set());
   const [skipSessionSent, setSkipSessionSent] = useState(true);
   const [skipRecentDays, setSkipRecentDays] = useState(0);
-  const [dailyLimit, setDailyLimit] = useState(100);
+  const [dailyLimit, setDailyLimit] = useState(500);
   const [dailySent, setDailySent] = useState(0);
 
   const [subject, setSubject] = useState('');
@@ -425,7 +425,7 @@ export default function ContactsPage() {
               className="input w-24"
               value={dailyLimit}
               onChange={(e) => {
-                const v = Number(e.target.value) || 100;
+                const v = Number(e.target.value) || 500;
                 setDailyLimit(v);
                 try {
                   localStorage.setItem(DAILY_LIMIT_KEY, String(v));
@@ -556,51 +556,48 @@ export default function ContactsPage() {
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2">Sends</th>
                   <th className="px-3 py-2">Last sent</th>
-                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Subject</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody>
                 {contacts.map((c) => {
+                  const isSelected = selected.has(c.email);
                   const isSession = sessionSent.has(c.email);
-                  const isEligible = eligible.some((e) => e.email === c.email);
                   return (
                     <tr
                       key={c.email}
                       className={
-                        'cursor-pointer hover:bg-white/5 ' +
-                        (selected.has(c.email) ? 'bg-fuchsia-500/10 ' : '') +
-                        (isSession ? 'opacity-50 ' : '')
+                        isSelected
+                          ? 'bg-fuchsia-500/15'
+                          : isSession
+                            ? 'opacity-50'
+                            : 'hover:bg-white/5'
                       }
-                      onClick={() => toggle(c.email)}
                     >
-                      <td
-                        className="px-3 py-2"
-                        onClick={(e) => e.stopPropagation()}
-                      >
+                      <td className="px-3 py-1.5">
                         <input
                           type="checkbox"
-                          checked={selected.has(c.email)}
+                          checked={isSelected}
                           onChange={() => toggle(c.email)}
                         />
                       </td>
-                      <td className="px-3 py-2 font-mono text-xs text-fuchsia-200">
+                      <td className="px-3 py-1.5 font-mono text-xs text-cyan-200">
                         {c.email}
-                      </td>
-                      <td className="px-3 py-2 text-white/70">{c.name || '—'}</td>
-                      <td className="px-3 py-2 text-xs text-white/60">
-                        {c.sendCount}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-white/45 whitespace-nowrap">
-                        {new Date(c.lastSentAt).toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2 text-[10px] uppercase tracking-wide">
                         {isSession ? (
-                          <span className="text-amber-300/90">session</span>
-                        ) : !isEligible ? (
-                          <span className="text-white/30">filtered</span>
-                        ) : (
-                          <span className="text-emerald-400/80">ready</span>
-                        )}
+                          <span className="ml-1 text-[10px] text-emerald-400">
+                            ✓ session
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-1.5 text-white/70">{c.name || '—'}</td>
+                      <td className="px-3 py-1.5 tabular-nums">{c.sendCount}</td>
+                      <td className="px-3 py-1.5 text-xs text-white/50">
+                        {c.lastSentAt
+                          ? new Date(c.lastSentAt).toLocaleString()
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-1.5 text-xs text-white/40 max-w-[180px] truncate">
+                        {c.lastSubject || '—'}
                       </td>
                     </tr>
                   );
@@ -611,35 +608,17 @@ export default function ContactsPage() {
         )}
       </div>
 
-      {/* HTML email composer */}
-      <div className="card space-y-5 p-6">
+      {/* Compose & send */}
+      <div className="card space-y-4 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-white">
-            HTML email · {selected.size} selected
-            {remainingToday < selected.size && dailyLimit > 0 ? (
-              <span className="ml-2 text-sm font-normal text-rose-300">
-                (over daily remaining {remainingToday})
-              </span>
-            ) : null}
+            Compose to selected
           </h2>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-white/70">
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={sendAsHtml}
-                onChange={(e) => setSendAsHtml(e.target.checked)}
-              />
-              Send as HTML
-            </label>
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={showPreview}
-                onChange={(e) => setShowPreview(e.target.checked)}
-              />
-              Live preview
-            </label>
-          </div>
+          {remainingToday < selected.size && dailyLimit > 0 ? (
+            <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-200">
+              Over daily quota — reduce selection or raise limit
+            </span>
+          ) : null}
         </div>
 
         <div>
@@ -648,53 +627,57 @@ export default function ContactsPage() {
             className="input"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            placeholder=""
-            autoComplete="off"
+            placeholder="Subject line…"
           />
-          <p className="mt-1 text-xs text-white/35">
-            Optional tokens: {'{{name}}'} {'{{company}}'} {'{{email}}'}{' '}
-            {'{{title}}'}
-          </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="flex flex-wrap gap-4">
+          <label className="inline-flex items-center gap-2 text-sm text-white/70">
+            <input
+              type="checkbox"
+              checked={sendAsHtml}
+              onChange={(e) => setSendAsHtml(e.target.checked)}
+            />
+            Send as HTML
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-white/70">
+            <input
+              type="checkbox"
+etscape checked={showPreview}
+              onChange={(e) => setShowPreview(e.target.checked)}
+            />
+            Show preview
+          </label>
+        </div>
+
+        {sendAsHtml ? (
           <div>
             <label className="label">HTML body</label>
             <textarea
-              className="input min-h-[280px] resize-y font-mono text-xs"
-              rows={16}
+              className="input min-h-[160px] font-mono text-xs"
               value={htmlBody}
               onChange={(e) => setHtmlBody(e.target.value)}
-              placeholder=""
-              spellCheck={false}
+              placeholder="Paste HTML email… tokens: {{name}} {{company}} {{email}} {{title}}"
             />
-            <p className="mt-1.5 text-xs text-white/35">
-              Paste your full HTML email here. Inline CSS works best in Gmail.
-            </p>
           </div>
-
+        ) : (
           <div>
-            <label className="label">Plain text (optional fallback)</label>
+            <label className="label">Text body</label>
             <textarea
-              className="input min-h-[280px] resize-y font-mono text-xs"
-              rows={16}
+              className="input min-h-[120px]"
               value={textBody}
               onChange={(e) => setTextBody(e.target.value)}
-              placeholder=""
-              spellCheck={false}
+              placeholder="Plain text…"
             />
-            <p className="mt-1.5 text-xs text-white/35">
-              Optional. Used when the client cannot show HTML.
-            </p>
           </div>
-        </div>
+        )}
 
-        {showPreview ? (
-          <div>
-            <label className="label">HTML preview</label>
+        {showPreview && sendAsHtml ? (
+          <div className="rounded-xl border border-white/10 bg-white p-4 text-black">
+            <div className="mb-2 text-xs font-semibold text-slate-500">
+              Preview
+            </div>
             <div
-              className="overflow-auto rounded-xl border border-white/10 bg-black/40 p-4"
-              style={{ minHeight: 160, maxHeight: 480 }}
               dangerouslySetInnerHTML={{
                 __html: htmlBody.trim()
                   ? previewTokens(htmlBody)
