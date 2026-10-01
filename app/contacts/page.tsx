@@ -11,6 +11,14 @@ type Contact = {
   lastSubject: string;
 };
 
+function previewTokens(template: string) {
+  return template
+    .split('{{name}}').join('Recipient')
+    .split('{{company}}').join('Company')
+    .split('{{email}}').join('name@example.com')
+    .split('{{title}}').join('Title');
+}
+
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,11 +27,12 @@ export default function ContactsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pickN, setPickN] = useState(50);
 
-  // Campaign compose
+  // Empty by default — no sample content to erase
   const [subject, setSubject] = useState('');
   const [htmlBody, setHtmlBody] = useState('');
   const [textBody, setTextBody] = useState('');
   const [sendAsHtml, setSendAsHtml] = useState(true);
+  const [showPreview, setShowPreview] = useState(true);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<any>(null);
 
@@ -83,17 +92,16 @@ export default function ContactsPage() {
         throw new Error('Select at least one contact');
       }
       if (!subject.trim()) throw new Error('Subject is required');
-      const bodyToSend = sendAsHtml ? htmlBody : textBody;
-      if (!bodyToSend.trim()) {
-        throw new Error(
-          sendAsHtml ? 'HTML body is required' : 'Plain text body is required'
-        );
+
+      if (sendAsHtml && !htmlBody.trim()) {
+        throw new Error('HTML body is required');
+      }
+      if (!sendAsHtml && !textBody.trim() && !htmlBody.trim()) {
+        throw new Error('Email body is required');
       }
 
       const to = selectedList
-        .map((c) =>
-          c.name ? `${c.name} <${c.email}>` : c.email
-        )
+        .map((c) => (c.name ? `${c.name} <${c.email}>` : c.email))
         .join('\n');
 
       const res = await fetch('/api/campaign', {
@@ -103,10 +111,10 @@ export default function ContactsPage() {
           mode: 'manual',
           to,
           subject,
-          body: bodyToSend,
           html: sendAsHtml,
           htmlBody: htmlBody.trim() || undefined,
           textBody: textBody.trim() || undefined,
+          body: sendAsHtml ? htmlBody : textBody || htmlBody,
           limit: Math.min(selected.size, 500),
           dryRun,
         }),
@@ -115,7 +123,6 @@ export default function ContactsPage() {
       if (!res.ok) throw new Error(data.error || 'Send failed');
       setResult(data);
       if (!dryRun && data.sent > 0) {
-        // Refresh so lastSentAt / counts update
         setTimeout(() => load(), 800);
       }
     } catch (e: any) {
@@ -142,8 +149,8 @@ export default function ContactsPage() {
         <div>
           <h1 className="page-title">Contacts</h1>
           <p className="page-subtitle">
-            People you already emailed successfully — pick them for the next
-            campaign without retyping addresses
+            Successful recipients — select and send HTML campaigns without
+            retyping addresses
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -229,162 +236,209 @@ export default function ContactsPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <div className="card overflow-hidden lg:col-span-3">
-          {loading ? (
-            <div className="p-6 text-sm text-white/50">Loading contacts…</div>
-          ) : contacts.length === 0 ? (
-            <div className="p-6 text-sm text-white/50">
-              No successful sends yet. After you send from{' '}
-              <Link href="/campaigns" className="text-fuchsia-300 underline">
-                Campaigns
-              </Link>
-              , recipients appear here automatically.
-            </div>
-          ) : (
-            <div className="max-h-[560px] overflow-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="sticky top-0 bg-[#1a0f2e] text-xs uppercase text-white/45">
-                  <tr>
-                    <th className="px-3 py-2 w-10">
+      {/* Contact list */}
+      <div className="card overflow-hidden">
+        {loading ? (
+          <div className="p-6 text-sm text-white/50">Loading contacts…</div>
+        ) : contacts.length === 0 ? (
+          <div className="p-6 text-sm text-white/50">
+            No successful sends yet. After you send from{' '}
+            <Link href="/campaigns" className="text-fuchsia-300 underline">
+              Campaigns
+            </Link>
+            , recipients appear here automatically.
+          </div>
+        ) : (
+          <div className="max-h-[360px] overflow-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-[#1a0f2e] text-xs uppercase text-white/45">
+                <tr>
+                  <th className="px-3 py-2 w-10">
+                    <input
+                      type="checkbox"
+                      checked={
+                        contacts.length > 0 && selected.size === contacts.length
+                      }
+                      onChange={(e) =>
+                        e.target.checked ? selectAll() : clearSelection()
+                      }
+                      aria-label="Select all"
+                    />
+                  </th>
+                  <th className="px-3 py-2">Email</th>
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Sends</th>
+                  <th className="px-3 py-2">Last sent</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {contacts.map((c) => (
+                  <tr
+                    key={c.email}
+                    className={
+                      'cursor-pointer hover:bg-white/5 ' +
+                      (selected.has(c.email) ? 'bg-fuchsia-500/10' : '')
+                    }
+                    onClick={() => toggle(c.email)}
+                  >
+                    <td
+                      className="px-3 py-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <input
                         type="checkbox"
-                        checked={
-                          contacts.length > 0 &&
-                          selected.size === contacts.length
-                        }
-                        onChange={(e) =>
-                          e.target.checked ? selectAll() : clearSelection()
-                        }
-                        aria-label="Select all"
+                        checked={selected.has(c.email)}
+                        onChange={() => toggle(c.email)}
                       />
-                    </th>
-                    <th className="px-3 py-2">Email</th>
-                    <th className="px-3 py-2">Name</th>
-                    <th className="px-3 py-2">Sends</th>
-                    <th className="px-3 py-2">Last sent</th>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-fuchsia-200">
+                      {c.email}
+                    </td>
+                    <td className="px-3 py-2 text-white/70">{c.name || '—'}</td>
+                    <td className="px-3 py-2 text-xs text-white/60">
+                      {c.sendCount}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-white/45 whitespace-nowrap">
+                      {new Date(c.lastSentAt).toLocaleString()}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {contacts.map((c) => (
-                    <tr
-                      key={c.email}
-                      className={
-                        'cursor-pointer hover:bg-white/5 ' +
-                        (selected.has(c.email) ? 'bg-fuchsia-500/10' : '')
-                      }
-                      onClick={() => toggle(c.email)}
-                    >
-                      <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(c.email)}
-                          onChange={() => toggle(c.email)}
-                        />
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-fuchsia-200">
-                        {c.email}
-                      </td>
-                      <td className="px-3 py-2 text-white/70">{c.name || '—'}</td>
-                      <td className="px-3 py-2 text-xs text-white/60">{c.sendCount}</td>
-                      <td className="px-3 py-2 text-xs text-white/45 whitespace-nowrap">
-                        {new Date(c.lastSentAt).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* HTML email composer — blank, no samples */}
+      <div className="card space-y-5 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-white">
+            HTML email · {selected.size} selected
+          </h2>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-white/70">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={sendAsHtml}
+                onChange={(e) => setSendAsHtml(e.target.checked)}
+              />
+              Send as HTML
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={showPreview}
+                onChange={(e) => setShowPreview(e.target.checked)}
+              />
+              Live preview
+            </label>
+          </div>
         </div>
 
-        <div className="card space-y-4 p-5 lg:col-span-2">
-          <h3 className="font-semibold text-white">
-            Email selected ({selected.size})
-          </h3>
-          <p className="text-xs text-white/45">
-            Uses the same SMTP campaign sender. Successful sends are logged
-            again to Sent inbox and stay on this list.
+        <div>
+          <label className="label">Subject</label>
+          <input
+            className="input"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            placeholder=""
+            autoComplete="off"
+          />
+          <p className="mt-1 text-xs text-white/35">
+            Optional tokens: {'{{name}}'} {'{{company}}'} {'{{email}}'}{' '}
+            {'{{title}}'}
           </p>
+        </div>
 
-          <div>
-            <label className="label">Subject</label>
-            <input
-              className="input"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Subject ({{name}} supported)"
-            />
-          </div>
-
-          <label className="inline-flex items-center gap-2 text-sm text-white/70">
-            <input
-              type="checkbox"
-              checked={sendAsHtml}
-              onChange={(e) => setSendAsHtml(e.target.checked)}
-            />
-            Prefer HTML
-          </label>
-
-          <div>
-            <label className="label">Plain text</label>
-            <textarea
-              className="input min-h-[100px] resize-y font-mono text-xs"
-              value={textBody}
-              onChange={(e) => setTextBody(e.target.value)}
-              placeholder="Hi {{name}}, …"
-            />
-          </div>
-
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div>
             <label className="label">HTML body</label>
             <textarea
-              className="input min-h-[120px] resize-y font-mono text-xs"
+              className="input min-h-[280px] resize-y font-mono text-xs"
+              rows={16}
               value={htmlBody}
               onChange={(e) => setHtmlBody(e.target.value)}
-              placeholder="<div>Hi {{name}}…</div>"
+              placeholder=""
+              spellCheck={false}
+            />
+            <p className="mt-1.5 text-xs text-white/35">
+              Paste your full HTML email here. Inline CSS works best in Gmail.
+            </p>
+          </div>
+
+          <div>
+            <label className="label">Plain text (optional fallback)</label>
+            <textarea
+              className="input min-h-[280px] resize-y font-mono text-xs"
+              rows={16}
+              value={textBody}
+              onChange={(e) => setTextBody(e.target.value)}
+              placeholder=""
+              spellCheck={false}
+            />
+            <p className="mt-1.5 text-xs text-white/35">
+              Optional. Used when the client cannot show HTML.
+            </p>
+          </div>
+        </div>
+
+        {showPreview ? (
+          <div>
+            <label className="label">HTML preview</label>
+            <div
+              className="overflow-auto rounded-xl border border-white/10 bg-black/40 p-4"
+              style={{ minHeight: 160, maxHeight: 480 }}
+              dangerouslySetInnerHTML={{
+                __html: htmlBody.trim()
+                  ? previewTokens(htmlBody)
+                  : '<p style="color:#64748b;font-family:sans-serif;font-size:13px;margin:0">HTML preview appears here when you paste markup above.</p>',
+              }}
             />
           </div>
+        ) : null}
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={sending || selected.size === 0}
-              onClick={() => sendToSelected(true)}
-            >
-              Preview
-            </button>
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={sending || selected.size === 0}
-              onClick={() => sendToSelected(false)}
-            >
-              {sending
-                ? 'Sending…'
-                : `Send to ${selected.size || 0} contact${selected.size === 1 ? '' : 's'}`}
-            </button>
+        {selected.size > 0 ? (
+          <div className="max-h-24 overflow-auto rounded-lg bg-black/30 p-2 font-mono text-[11px] text-white/50">
+            {selectedList
+              .slice(0, 40)
+              .map((c) => c.email)
+              .join(', ')}
+            {selectedList.length > 40
+              ? ` … +${selectedList.length - 40} more`
+              : ''}
           </div>
+        ) : (
+          <p className="text-sm text-white/40">
+            Select contacts above, then paste your HTML and send.
+          </p>
+        )}
 
-          {selected.size > 0 ? (
-            <div className="max-h-28 overflow-auto rounded-lg bg-black/30 p-2 font-mono text-[11px] text-white/50">
-              {selectedList
-                .slice(0, 30)
-                .map((c) => c.email)
-                .join(', ')}
-              {selectedList.length > 30
-                ? ` … +${selectedList.length - 30} more`
-                : ''}
-            </div>
-          ) : null}
-
-          {result ? (
-            <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/30 p-2 text-xs text-white/70">
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          ) : null}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={sending || selected.size === 0}
+            onClick={() => sendToSelected(true)}
+          >
+            Preview send
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={sending || selected.size === 0}
+            onClick={() => sendToSelected(false)}
+          >
+            {sending
+              ? 'Sending…'
+              : `Send HTML to ${selected.size || 0} contact${selected.size === 1 ? '' : 's'}`}
+          </button>
         </div>
+
+        {result ? (
+          <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-white/70">
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        ) : null}
       </div>
     </div>
   );
