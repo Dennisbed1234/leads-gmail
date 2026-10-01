@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { ensureSentEmailTable } from '@/lib/db/ensure-sent-email';
 import {
   isSmtpConfigured,
   personalize,
@@ -85,6 +86,8 @@ function snippet(text?: string, html?: string): string {
   return raw.slice(0, 280);
 }
 
+let tableReady = false;
+
 async function logSent(data: {
   toEmail: string;
   toName?: string;
@@ -97,6 +100,10 @@ async function logSent(data: {
   isHtml?: boolean;
 }) {
   try {
+    if (!tableReady) {
+      await ensureSentEmailTable();
+      tableReady = true;
+    }
     const { fromName } = getSmtpConfig();
     await prisma.sentEmail.create({
       data: {
@@ -109,11 +116,32 @@ async function logSent(data: {
         error: data.error || null,
         mode: data.mode || null,
         isHtml: data.isHtml !== false,
-        fromName: fromName || 'CryptoByt',
+        fromName: fromName || 'BOA',
       },
     });
   } catch (e) {
     console.warn('SentEmail log failed:', e);
+    try {
+      await ensureSentEmailTable();
+      tableReady = true;
+      const { fromName } = getSmtpConfig();
+      await prisma.sentEmail.create({
+        data: {
+          toEmail: data.toEmail,
+          toName: data.toName || null,
+          subject: data.subject,
+          bodySnippet: data.bodySnippet || null,
+          status: data.status,
+          messageId: data.messageId || null,
+          error: data.error || null,
+          mode: data.mode || null,
+          isHtml: data.isHtml !== false,
+          fromName: fromName || 'BOA',
+        },
+      });
+    } catch (e2) {
+      console.warn('SentEmail log retry failed:', e2);
+    }
   }
 }
 
@@ -152,6 +180,10 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Make sure sent log table exists before the batch runs
+    await ensureSentEmailTable();
+    tableReady = true;
 
     const body = await request.json();
     const subjectTemplate = String(body.subject || '').trim();
@@ -376,7 +408,7 @@ export async function POST(request: Request) {
       note:
         failed > 0
           ? 'See errors[] and Sent inbox for details. Common fix: Gmail App Password + SMTP_FROM must match SMTP_USER.'
-          : 'Logged to Sent inbox.',
+          : 'Logged to Sent inbox and Contacts.',
     });
   } catch (error: any) {
     console.error('Campaign error:', error);
