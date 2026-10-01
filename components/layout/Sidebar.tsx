@@ -12,6 +12,7 @@ const nav = [
   { name: 'Leads', href: '/leads', icon: IconUsers },
   { name: 'Analytics', href: '/analytics', icon: IconChart },
   { name: 'Campaigns', href: '/campaigns', icon: IconMail },
+  { name: 'Contacts', href: '/contacts', icon: IconBook },
   { name: 'Sent inbox', href: '/inbox', icon: IconInbox },
   { name: 'Settings', href: '/settings', icon: IconSettings },
 ];
@@ -178,6 +179,15 @@ function IconMail({ active }: { active?: boolean }) {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
       <rect x="3" y="5" width="18" height="14" rx="2" />
       <path d="M3 7l9 6 9-6" />
+    </svg>
+  );
+}
+
+function IconBook({ active }: { active?: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={active ? 'text-fuchsia-300' : 'text-white/35'}>
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
     </svg>
   );
 }
