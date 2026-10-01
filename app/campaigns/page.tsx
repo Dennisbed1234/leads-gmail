@@ -8,7 +8,8 @@ type Attachment = {
   contentType?: string;
 };
 
-const DEFAULT_HTML = [
+/** Optional samples — only applied when user clicks "Load sample templates". */
+const SAMPLE_HTML = [
   '<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#0f0720;color:#f8fafc;border-radius:16px">',
   '<div style="height:6px;border-radius:999px;background:linear-gradient(90deg,#f43f5e,#a855f7,#22d3ee);margin-bottom:20px"></div>',
   '<h1 style="font-size:22px;margin:0 0 12px">Hi {{name}},</h1>',
@@ -18,7 +19,7 @@ const DEFAULT_HTML = [
   '</div>',
 ].join('');
 
-const DEFAULT_TEXT = [
+const SAMPLE_TEXT = [
   'Hi {{name}},',
   '',
   'I came across {{company}} and wanted to share a quick idea.',
@@ -27,6 +28,8 @@ const DEFAULT_TEXT = [
   '',
   'Best regards',
 ].join('\n');
+
+const SAMPLE_SUBJECT = 'Quick idea for {{company}}';
 
 function fillTokens(template: string) {
   return template
@@ -39,9 +42,9 @@ function fillTokens(template: string) {
 export default function CampaignsPage() {
   const [mode, setMode] = useState<'manual' | 'leads'>('manual');
   const [to, setTo] = useState('');
-  const [subject, setSubject] = useState('Quick idea for {{company}}');
-  const [htmlBody, setHtmlBody] = useState(DEFAULT_HTML);
-  const [textBody, setTextBody] = useState(DEFAULT_TEXT);
+  const [subject, setSubject] = useState('');
+  const [htmlBody, setHtmlBody] = useState('');
+  const [textBody, setTextBody] = useState('');
   const [sendAsHtml, setSendAsHtml] = useState(true);
   const [showPreview, setShowPreview] = useState(true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -96,6 +99,10 @@ export default function CampaignsPage() {
     try {
       if (mode === 'manual' && !to.trim()) {
         throw new Error('Add at least one email in the To field');
+      }
+
+      if (!subject.trim()) {
+        throw new Error('Subject is required');
       }
 
       const bodyToSend = sendAsHtml ? htmlBody : textBody;
@@ -210,6 +217,7 @@ export default function CampaignsPage() {
               className="input"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
+              placeholder="Email subject (supports {{name}}, {{company}}, …)"
             />
           </div>
 
@@ -234,11 +242,23 @@ export default function CampaignsPage() {
               type="button"
               className="btn-ghost text-xs"
               onClick={() => {
-                setHtmlBody(DEFAULT_HTML);
-                setTextBody(DEFAULT_TEXT);
+                setSubject(SAMPLE_SUBJECT);
+                setHtmlBody(SAMPLE_HTML);
+                setTextBody(SAMPLE_TEXT);
               }}
             >
               Load sample templates
+            </button>
+            <button
+              type="button"
+              className="btn-ghost text-xs"
+              onClick={() => {
+                setSubject('');
+                setHtmlBody('');
+                setTextBody('');
+              }}
+            >
+              Clear all
             </button>
           </div>
 
@@ -281,7 +301,11 @@ export default function CampaignsPage() {
               <div
                 className="overflow-auto rounded-xl border border-white/10 bg-black/40 p-4"
                 style={{ minHeight: 160, maxHeight: 420 }}
-                dangerouslySetInnerHTML={{ __html: fillTokens(htmlBody) }}
+                dangerouslySetInnerHTML={{
+                  __html: htmlBody.trim()
+                    ? fillTokens(htmlBody)
+                    : '<p style="color:#64748b;font-family:sans-serif;font-size:14px">No HTML yet — paste markup above or load a sample.</p>',
+                }}
               />
             </div>
           )}
