@@ -643,7 +643,7 @@ export default function ContactsPage() {
           <label className="inline-flex items-center gap-2 text-sm text-white/70">
             <input
               type="checkbox"
-etscape checked={showPreview}
+              checked={showPreview}
               onChange={(e) => setShowPreview(e.target.checked)}
             />
             Show preview
