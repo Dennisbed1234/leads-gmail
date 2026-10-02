@@ -11,7 +11,7 @@ export type EmailAttachment = {
 
 /** Embedded CryptoByt mark (72x72 PNG) - CID inline so logo shows outside Gmail */
 const CRYPTOBYT_LOGO_PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAIAAADajyuuAAABhGlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AcxV9TpSIVBzuIOGSoThZERRxLFYtgobQVWnUwufQLmjQkKS6OgmvBwY/FqoOLs64OroIg+AHi5Oik6CIl/i8ptIjx4Lgf7+49d99f4BVYW1ac0QCqp5vFZjIGXb1yLrgRhhCiCKMMs81ZTjOTdb3L1z0D+JYH+Z6bv/Q9EBqYgDhgkdjIlyJ2QeF3cWZnzZKSZ8wzk2RRzxTHSVUxmsfzF2dYy1rXzCwmF3N8sZjLywLxi7m0cnHec1jKjKJp4zOKMU9cFQj7m8Ws9jxHKa5yjrHSaQxeJI7KuU7Wmjsn1mIt0C+p1yuu0Jz5BAksYIiECEkoqKEDFVVhIRvrOIz7+I9cv0ouhUJx4Kg/MKwgdLaRGyGjg5ps4H/wu1szHxzlSpN4onw8H8BJdpe43eMgdY+A65013+0AQ4+gVNrbXW3Ac0/wGXVbXkP0XcPFY7J3M7JpH0jcG7S4/WIDuJ4s3gANdHxIHSXN81dG+l3w+QNc1NIyS5zvB4cFoHYN2J46y9Ac6MP0luj9H6QOFeoqvQAAAAlwSFlzAAAuIwAALiMBeKU/dgAAAAd0SU1FB+gKAgMGFgv9VnMAAAAZdEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVWmuKZlAAAAjklEQVR4nO3BMQEAAADCoPVP7WsIoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4G0BYgABZyqGqwAAAABJRU5ErkJggg==';
+  'iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAIAAADajyQQAAAEDUlEQVR42u2bTUwTQRSAd6ctpVtK+WkFiyhUaMD6h0o8KWLRgzFRoxAjJsaDiTHASYhRExIPHjReBCXqAY3xguLBgCYKAYIhViIE+RUNaBBCRWjZlkLbLfVggqZd2u3ubHen+o4vOzPv2zfvzZvZHTxWEYtFowAsSkXKX9dtzj0hnykkOnkaHYc7FZnARAYSDhgXHp4IuYLBRYKIxx6MPyQoeEDMVFwGCttjEUPi6DqABBWLoQESVCwMAKhQhWsGQIgqLGMAWlTMTQLIUTE0DKBIxcQ8gChVSCOjdj8G0HVXcFMB0lRBDJbyParT7h00k/1d5Kcex/ysh5zz2G0UALhSJVFrZOsNRKaRyCtIMGyPw6GGhX8RDNFdE6OLDTWT7Y0zlMcX8mF1sqzopPbQmVRdJsttlF+VzIvHFh3emsqx9sYZn49pk/lZT+OdqY9vydstW+EnDyjuGh9ylpv62p6FQcVHpEH22HC3/fKJoSWnV/CMAhPsx3dXdenwalQbcghTsXZHYYJGF6OMl9qt1JzFPWgme9ps3a22ZS9k//5JHtznYdWRgf4ukublyfBz1zIOn00FEpz+jUy4ntdNNdVP641KjjG2kkKgeazzxexqVNWPc3aZEoO0XZMuP38982DpmpcPLfxWHizk6e1JWv2pi+nBqVZEb1SW3dSLC+zbiPNznyNQr02Tl1SkCVkrcgyw92+stPpDZ1IkUlyQpA/HYyMf7LT6/KJETCCBA/b9y1KgUq4AmZsItMFmp92ByqSUmNXyOzJgSws0i3KcWooJJ3zuoHEMebBYgqYfh41CHiwpNSZQOWdxQ68AIw22LksRqHQtLn8ddqINlrtTRb9wt1jRBss/QL8Qv3pkEWo2wgHLyCWytippd2gNNZNCgnH/UF9cTl/sPrkx0dNmY3imUFs5xtGMFRBo69jeoxrj7vhAPeXxVZ8ebq6f9i2v2nZm0nXv6nhFUd9or0OMRwOVddll+/sCly/K7autGmuqnzaVaHfsS9Do5IRK4pin5izuIbO9p8P2/rXVS4n4aADDsEEzeaV4yLW4zK559rY4WEcDIFDFRYy74281b1mbIcwfdX8jwK8VN25R1rRuKzimwaOgVvQTZbzk0n3D3Y7tphItwx20Oll2/ILu0gMD/BiDGGl/ywLpHXhH9nfNj/Y6bD89Div1+6MEoZIkaGXp2Qr9ZmXeXrUhT8Xxo4RfKPEOJkiA0UxF/v6MjCQV9m99qkXOabQGA+aPIkSF/XN/DaDitCBGAnbNRE4VeiqKli2kYYB7FyKkYpo8RMXG0BgAtzuRUIWX7gVnC8sAwF/XAlJhrG9KRHITwO5tgkgOFsmB/l/aiSCeKK5ZQSQU48U41pDIXGVEYNuCuvwCJI6UK7w8tQ4AAAAASUVORK5CYII=';
 const CRYPTOBYT_LOGO_CID = 'cryptobyt-logo@cryptobyt';
 
 const LOGO_IMG_TAG =
@@ -238,9 +238,9 @@ function stripHtml(html: string): string {
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
+    .replace(/&/gi, '&')
+    .replace(/</gi, '<')
+    .replace(/>/gi, '>')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -265,9 +265,9 @@ export async function sendOneEmail(options: {
     options.html ||
     (options.text
       ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#222222">${options.text
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
+          .replace(/&/g, '&')
+          .replace(/</g, '<')
+          .replace(/>/g, '>')
           .replace(/\n/g, '<br>')}</div>`
       : undefined);
 
