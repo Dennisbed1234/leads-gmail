@@ -84,6 +84,7 @@ export default function ContactsPage() {
   const [showPreview, setShowPreview] = useState(true);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [copyStatus, setCopyStatus] = useState('');
 
   // Restore prefs
   useEffect(() => {
@@ -213,17 +214,8 @@ export default function ContactsPage() {
   };
 
   const selectAllEligible = () => {
-    if (orderedForMode.length > remainingToday && dailyLimit > 0) {
-      setError(
-        `Not selecting all ${orderedForMode.length} — would exceed daily limit (${remainingToday} left). Use “Next batch” instead.`
-      );
-      // Soft select only remaining quota
-      setSelected(
-        new Set(orderedForMode.slice(0, remainingToday).map((c) => c.email))
-      );
-      return;
-    }
     setSelected(new Set(orderedForMode.map((c) => c.email)));
+    setError('');
   };
 
   const selectedList = useMemo(
@@ -316,6 +308,28 @@ export default function ContactsPage() {
     a.download = `contacts-${selected.size}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const copySelected = async () => {
+    if (selectedList.length === 0) return;
+    const text = selectedList.map((c) => c.email).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus(`Copied ${selectedList.length} emails`);
+      setTimeout(() => setCopyStatus(''), 2000);
+    } catch {
+      // Fallback for older browsers
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopyStatus(`Copied ${selectedList.length} emails`);
+      setTimeout(() => setCopyStatus(''), 2000);
+    }
   };
 
   const resetCursor = () => {
@@ -477,9 +491,9 @@ export default function ContactsPage() {
             type="button"
             className="btn-secondary"
             onClick={selectAllEligible}
-            title="Capped by daily remaining quota"
+            title="Select every eligible contact (send still respects daily limit)"
           >
-            Select all eligible (safe)
+            Select all eligible
           </button>
           <button type="button" className="btn-secondary" onClick={clearSelection}>
             Clear selection
@@ -489,6 +503,14 @@ export default function ContactsPage() {
           </button>
           <button type="button" className="btn-ghost text-xs" onClick={resetDaily}>
             Reset daily counter
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={selected.size === 0}
+            onClick={copySelected}
+          >
+            {copyStatus || `Copy selected emails (${selected.size})`}
           </button>
           <button
             type="button"
@@ -561,42 +583,39 @@ export default function ContactsPage() {
               </thead>
               <tbody>
                 {contacts.map((c) => {
+                  const isEligible = orderedForMode.some((e) => e.email === c.email);
                   const isSelected = selected.has(c.email);
-                  const isSession = sessionSent.has(c.email);
+                  const isSessionSent = sessionSent.has(c.email);
                   return (
                     <tr
                       key={c.email}
                       className={
                         isSelected
-                          ? 'bg-fuchsia-500/15'
-                          : isSession
-                            ? 'opacity-50'
+                          ? 'bg-fuchsia-500/10'
+                          : isSessionSent
+                            ? 'opacity-40'
                             : 'hover:bg-white/5'
                       }
                     >
-                      <td className="px-3 py-1.5">
+                      <td className="px-3 py-2">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggle(c.email)}
+                          disabled={!isEligible && !isSelected}
                         />
                       </td>
-                      <td className="px-3 py-1.5 font-mono text-xs text-cyan-200">
+                      <td className="px-3 py-2 font-mono text-xs text-white/90">
                         {c.email}
-                        {isSession ? (
-                          <span className="ml-1 text-[10px] text-emerald-400">
-                            ✓ session
-                          </span>
-                        ) : null}
                       </td>
-                      <td className="px-3 py-1.5 text-white/70">{c.name || '—'}</td>
-                      <td className="px-3 py-1.5 tabular-nums">{c.sendCount}</td>
-                      <td className="px-3 py-1.5 text-xs text-white/50">
+                      <td className="px-3 py-2 text-white/70">{c.name || '—'}</td>
+                      <td className="px-3 py-2 text-white/50">{c.sendCount}</td>
+                      <td className="px-3 py-2 text-white/50 text-xs">
                         {c.lastSentAt
                           ? new Date(c.lastSentAt).toLocaleString()
                           : '—'}
                       </td>
-                      <td className="px-3 py-1.5 text-xs text-white/40 max-w-[180px] truncate">
+                      <td className="px-3 py-2 text-white/40 text-xs truncate max-w-[180px]">
                         {c.lastSubject || '—'}
                       </td>
                     </tr>
@@ -608,19 +627,9 @@ export default function ContactsPage() {
         )}
       </div>
 
-      {/* Compose & send */}
+      {/* Compose + send */}
       <div className="card space-y-4 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-white">
-            Compose to selected
-          </h2>
-          {remainingToday < selected.size && dailyLimit > 0 ? (
-            <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-200">
-              Over daily quota — reduce selection or raise limit
-            </span>
-          ) : null}
-        </div>
-
+        <h2 className="text-lg font-semibold text-white">Send to selected</h2>
         <div>
           <label className="label">Subject</label>
           <input
@@ -630,8 +639,7 @@ export default function ContactsPage() {
             placeholder="Subject line…"
           />
         </div>
-
-        <div className="flex flex-wrap gap-4">
+        <div className="flex items-center gap-4">
           <label className="inline-flex items-center gap-2 text-sm text-white/70">
             <input
               type="checkbox"
@@ -649,7 +657,6 @@ export default function ContactsPage() {
             Show preview
           </label>
         </div>
-
         {sendAsHtml ? (
           <div>
             <label className="label">HTML body</label>
@@ -657,97 +664,53 @@ export default function ContactsPage() {
               className="input min-h-[160px] font-mono text-xs"
               value={htmlBody}
               onChange={(e) => setHtmlBody(e.target.value)}
-              placeholder="Paste HTML email… tokens: {{name}} {{company}} {{email}} {{title}}"
+              placeholder="HTML email body. Tokens: {{name}} {{email}} {{company}} {{title}}"
             />
           </div>
         ) : (
           <div>
             <label className="label">Text body</label>
             <textarea
-              className="input min-h-[120px]"
+              className="input min-h-[160px]"
               value={textBody}
               onChange={(e) => setTextBody(e.target.value)}
-              placeholder="Plain text…"
+              placeholder="Plain text body…"
             />
           </div>
         )}
-
-        {showPreview && sendAsHtml ? (
-          <div className="rounded-xl border border-white/10 bg-white p-4 text-black">
-            <div className="mb-2 text-xs font-semibold text-slate-500">
-              Preview
-            </div>
+        {showPreview && (htmlBody || textBody) ? (
+          <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white/70">
+            <div className="mb-1 text-xs uppercase text-white/40">Preview</div>
             <div
               dangerouslySetInnerHTML={{
-                __html: htmlBody.trim()
-                  ? previewTokens(htmlBody)
-                  : '<p style="color:#64748b;font-family:sans-serif;font-size:13px;margin:0">HTML preview appears here when you paste markup above.</p>',
+                __html: previewTokens(sendAsHtml ? htmlBody : textBody),
               }}
             />
           </div>
         ) : null}
-
-        {selected.size > 0 ? (
-          <div className="max-h-24 overflow-auto rounded-lg bg-black/30 p-2 font-mono text-[11px] text-white/50">
-            {selectedList
-              .slice(0, 40)
-              .map((c) => c.email)
-              .join(', ')}
-            {selectedList.length > 40
-              ? ` … +${selectedList.length - 40} more`
-              : ''}
-          </div>
-        ) : (
-          <p className="text-sm text-white/40">
-            Use <strong>Select next {pickN}</strong> above, then paste HTML and
-            send.
-          </p>
-        )}
-
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={sending || selected.size === 0}
+            onClick={() => sendToSelected(false)}
+          >
+            {sending ? 'Sending…' : `Send to ${selected.size} selected`}
+          </button>
           <button
             type="button"
             className="btn-secondary"
             disabled={sending || selected.size === 0}
             onClick={() => sendToSelected(true)}
           >
-            Preview send
+            Dry run
           </button>
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={
-              sending ||
-              selected.size === 0 ||
-              (dailyLimit > 0 && selected.size > remainingToday)
-            }
-            onClick={() => sendToSelected(false)}
-          >
-            {sending
-              ? 'Sending…'
-              : `Send HTML to ${selected.size || 0} contact${selected.size === 1 ? '' : 's'}`}
-          </button>
-          {!sending && selected.size > 0 && remainingToday >= selected.size ? (
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={async () => {
-                await sendToSelected(false);
-                // After send, auto-prep next batch if send succeeded
-                // (selection cleared inside send; pick next)
-                setTimeout(() => selectNextBatch(pickN), 1000);
-              }}
-              title="Send current batch, then auto-select the next batch"
-            >
-              Send & load next {pickN}
-            </button>
-          ) : null}
         </div>
-
         {result ? (
-          <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-white/70">
-            {JSON.stringify(result, null, 2)}
-          </pre>
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
+            Sent: {result.sent ?? 0} · Failed: {result.failed ?? 0}
+            {result.error ? ` · ${result.error}` : ''}
+          </div>
         ) : null}
       </div>
     </div>
