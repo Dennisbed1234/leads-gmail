@@ -148,19 +148,32 @@ export function isSmtpConfigured(): boolean {
 }
 
 export function resetTransporter() {
+  if (transporter) {
+    try {
+      transporter.close();
+    } catch {
+      /* ignore */
+    }
+  }
   transporter = null;
 }
 
 export function getTransporter(): Transporter {
   if (transporter) return transporter;
 
-  const { host, port, user, pass } = getSmtpConfig();
+  const { host, port, user, pass, isGmail } = getSmtpConfig();
 
   if (!user || !pass) {
     throw new Error(
       'SMTP not configured. Set SMTP_USER and SMTP_PASS on Vercel.'
     );
   }
+
+  // Connection pool keeps one SMTP session open → much faster multi-send
+  const maxConn = Math.min(
+    Math.max(parseInt(process.env.SMTP_MAX_CONNECTIONS || (isGmail ? '2' : '5'), 10), 1),
+    10
+  );
 
   transporter = nodemailer.createTransport({
     host,
@@ -170,9 +183,15 @@ export function getTransporter(): Transporter {
     tls: {
       rejectUnauthorized: process.env.SMTP_TLS_REJECT !== '0',
     },
-    connectionTimeout: 20000,
-    greetingTimeout: 15000,
-    socketTimeout: 30000,
+    pool: true,
+    maxConnections: maxConn,
+    maxMessages: 200,
+    rateDelta: 1000,
+    // Gmail tolerates a few/sec; higher risks 421 rate limits
+    rateLimit: isGmail ? 8 : 20,
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 25000,
     name: process.env.SMTP_HELO || process.env.SMTP_HOSTNAME || undefined,
   });
 
@@ -363,8 +382,17 @@ export async function sendOneEmail(options: {
 export const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Pause between recipients.
+ * Default is FAST (~150–350ms). Old default was 4–7 seconds.
+ * Set SMTP_SEND_DELAY_MS=0 for maximum speed (Gmail may rate-limit).
+ * Set SMTP_SEND_DELAY_MS=2000 for safer/slower warming.
+ */
 export function sendDelayMs(): number {
-  const base = parseInt(process.env.SMTP_SEND_DELAY_MS || '4000', 10);
-  const jitter = Math.floor(Math.random() * 3000);
-  return Math.max(2500, (Number.isFinite(base) ? base : 4000) + jitter);
+  const raw = process.env.SMTP_SEND_DELAY_MS;
+  // Default 150ms — was 4000ms before (that made batches feel stuck)
+  const base = raw === undefined || raw === '' ? 150 : parseInt(raw, 10);
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  const jitter = Math.floor(Math.random() * Math.min(200, base));
+  return base + jitter;
 }
