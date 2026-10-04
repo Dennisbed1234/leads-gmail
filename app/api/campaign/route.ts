@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/db/prisma';
 import { ensureSentEmailTable } from '@/lib/db/ensure-sent-email';
 import {
@@ -11,6 +12,7 @@ import {
   getSmtpConfig,
   type EmailAttachment,
 } from '@/lib/email/smtp';
+import { prepareTrackedHtml, getAppBaseUrl } from '@/lib/tracking';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -89,15 +91,17 @@ function snippet(text?: string, html?: string): string {
 let tableReady = false;
 
 async function logSent(data: {
+  id?: string;
   toEmail: string;
   toName?: string;
   subject: string;
   bodySnippet?: string;
-  status: 'SENT' | 'FAILED';
+  status: 'SENT' | 'DELIVERED' | 'OPENED' | 'FAILED';
   messageId?: string;
   error?: string;
   mode?: string;
   isHtml?: boolean;
+  lastEvent?: string;
 }) {
   try {
     if (!tableReady) {
@@ -105,28 +109,13 @@ async function logSent(data: {
       tableReady = true;
     }
     const { fromName } = getSmtpConfig();
-    await prisma.sentEmail.create({
-      data: {
-        toEmail: data.toEmail,
-        toName: data.toName || null,
-        subject: data.subject,
-        bodySnippet: data.bodySnippet || null,
-        status: data.status,
-        messageId: data.messageId || null,
-        error: data.error || null,
-        mode: data.mode || null,
-        isHtml: data.isHtml !== false,
-        fromName: fromName || 'BOA',
-      },
-    });
-  } catch (e) {
-    console.warn('SentEmail log failed:', e);
+    const id = data.id || randomUUID();
+    const now = new Date();
+
     try {
-      await ensureSentEmailTable();
-      tableReady = true;
-      const { fromName } = getSmtpConfig();
       await prisma.sentEmail.create({
         data: {
+          id,
           toEmail: data.toEmail,
           toName: data.toName || null,
           subject: data.subject,
@@ -136,12 +125,35 @@ async function logSent(data: {
           error: data.error || null,
           mode: data.mode || null,
           isHtml: data.isHtml !== false,
-          fromName: fromName || 'BOA',
+          fromName: fromName || 'CryptoByt',
+          deliveredAt:
+            data.status === 'DELIVERED' || data.status === 'SENT' ? now : null,
+          openCount: 0,
+          lastEvent: data.lastEvent || data.status.toLowerCase(),
+        } as any,
+      });
+    } catch {
+      // Older client without new fields
+      await prisma.sentEmail.create({
+        data: {
+          id,
+          toEmail: data.toEmail,
+          toName: data.toName || null,
+          subject: data.subject,
+          bodySnippet: data.bodySnippet || null,
+          status: data.status,
+          messageId: data.messageId || null,
+          error: data.error || null,
+          mode: data.mode || null,
+          isHtml: data.isHtml !== false,
+          fromName: fromName || 'CryptoByt',
         },
       });
-    } catch (e2) {
-      console.warn('SentEmail log retry failed:', e2);
     }
+    return id;
+  } catch (e) {
+    console.warn('SentEmail log failed:', e);
+    return data.id || null;
   }
 }
 
@@ -166,6 +178,8 @@ export async function GET() {
     from: cfg.fromEmail || null,
     fromName: cfg.fromName || null,
     maxRecipients: MAX_RECIPIENTS,
+    appUrl: getAppBaseUrl(),
+    tracking: true,
   });
 }
 
@@ -181,7 +195,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Make sure sent log table exists before the batch runs
     await ensureSentEmailTable();
     tableReady = true;
 
@@ -283,6 +296,7 @@ export async function POST(request: Request) {
         attachmentCount: attachments.length,
         wouldSend: recipients.length,
         limit,
+        appUrl: getAppBaseUrl(),
         recipients: recipients.map((r) => ({
           email: r.email,
           name: r.name,
@@ -310,6 +324,7 @@ export async function POST(request: Request) {
         title: r.title,
       };
       const subject = personalize(subjectTemplate, vars);
+      const trackId = randomUUID();
 
       try {
         const personalizedHtml = htmlTemplate
@@ -319,11 +334,16 @@ export async function POST(request: Request) {
           ? personalize(textTemplate, vars)
           : undefined;
 
+        // Open tracking pixel (Inbox-Mailer style events via our own endpoint)
+        const trackedHtml = personalizedHtml
+          ? prepareTrackedHtml(personalizedHtml, trackId)
+          : undefined;
+
         const html = preferHtml
-          ? personalizedHtml || undefined
+          ? trackedHtml || personalizedHtml || undefined
           : personalizedHtml && !personalizedText
-            ? personalizedHtml
-            : personalizedHtml || undefined;
+            ? trackedHtml || personalizedHtml
+            : trackedHtml || personalizedHtml || undefined;
 
         const text =
           personalizedText ||
@@ -343,14 +363,16 @@ export async function POST(request: Request) {
         sentTo.push(r.email);
 
         await logSent({
+          id: trackId,
           toEmail: r.email,
           toName: r.name,
           subject,
           bodySnippet: snippet(text, html),
-          status: 'SENT',
+          status: 'DELIVERED',
           messageId: result.messageId,
           mode,
           isHtml: preferHtml,
+          lastEvent: 'delivered',
         });
 
         if (mode === 'leads') {
@@ -373,6 +395,7 @@ export async function POST(request: Request) {
         errors.push(`${r.email}: ${errMsg}`);
 
         await logSent({
+          id: trackId,
           toEmail: r.email,
           toName: r.name,
           subject,
@@ -384,6 +407,7 @@ export async function POST(request: Request) {
           error: errMsg,
           mode,
           isHtml: preferHtml,
+          lastEvent: 'failed',
         });
 
         if (i < recipients.length - 1) {
@@ -405,10 +429,11 @@ export async function POST(request: Request) {
       limit,
       sentTo,
       errors: errors.slice(0, 20),
+      appUrl: getAppBaseUrl(),
       note:
         failed > 0
-          ? 'See errors[] and Sent inbox for details. Common fix: Gmail App Password + SMTP_FROM must match SMTP_USER.'
-          : 'Logged to Sent inbox and Contacts.',
+          ? 'See errors[] and Sent inbox. Opens require HTML + APP_URL/NEXTAUTH_URL set.'
+          : 'Logged as DELIVERED. Opens update when recipient loads images.',
     });
   } catch (error: any) {
     console.error('Campaign error:', error);
