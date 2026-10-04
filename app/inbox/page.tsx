@@ -15,15 +15,38 @@ type SentItem = {
   isHtml?: boolean;
   fromName?: string | null;
   createdAt: string;
+  deliveredAt?: string | null;
+  openedAt?: string | null;
+  openCount?: number | null;
+  lastEvent?: string | null;
 };
+
+function statusLabel(item: SentItem) {
+  const s = (item.status || '').toUpperCase();
+  const ev = (item.lastEvent || '').toLowerCase();
+  if (s === 'FAILED' || ev === 'failed') return { text: 'Failed', className: 'text-rose-300' };
+  if (s === 'OPENED' || ev === 'opened' || ev === 'clicked')
+    return { text: 'Opened', className: 'text-sky-300' };
+  if (s === 'DELIVERED' || ev === 'delivered')
+    return { text: 'Delivered', className: 'text-emerald-300' };
+  return { text: 'Sent', className: 'text-white/70' };
+}
 
 export default function InboxPage() {
   const [items, setItems] = useState<SentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [status, setStatus] = useState<'all' | 'SENT' | 'FAILED'>('all');
+  const [status, setStatus] = useState<
+    'all' | 'SENT' | 'DELIVERED' | 'OPENED' | 'FAILED'
+  >('all');
   const [q, setQ] = useState('');
-  const [stats, setStats] = useState({ total: 0, sentCount: 0, failedCount: 0 });
+  const [stats, setStats] = useState({
+    total: 0,
+    sentCount: 0,
+    failedCount: 0,
+    deliveredCount: 0,
+    openedCount: 0,
+  });
   const [selected, setSelected] = useState<SentItem | null>(null);
   const [note, setNote] = useState('');
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -46,6 +69,8 @@ export default function InboxPage() {
         total: data.total || 0,
         sentCount: data.sentCount || 0,
         failedCount: data.failedCount || 0,
+        deliveredCount: data.deliveredCount || 0,
+        openedCount: data.openedCount || 0,
       });
       setNote(data.note || '');
       setNeedsSetup(Boolean(data.needsSetup));
@@ -58,6 +83,8 @@ export default function InboxPage() {
 
   useEffect(() => {
     load();
+    const t = setInterval(load, 20000);
+    return () => clearInterval(t);
   }, [load]);
 
   const createTable = async () => {
@@ -120,7 +147,7 @@ export default function InboxPage() {
         <div>
           <h1 className="page-title">Sent inbox</h1>
           <p className="page-subtitle">
-            Monitor emails you sent from Campaigns (BOA)
+            Sent → Delivered → Opened (same event style as Inbox-Mailer / Resend)
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -133,14 +160,24 @@ export default function InboxPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="card p-4 text-center">
           <div className="text-2xl font-semibold text-white">{stats.total}</div>
-          <div className="text-xs text-white/45">Total logged</div>
+          <div className="text-xs text-white/45">Total</div>
         </div>
         <div className="card p-4 text-center">
-          <div className="text-2xl font-semibold text-emerald-300">{stats.sentCount}</div>
+          <div className="text-2xl font-semibold text-white/80">{stats.sentCount}</div>
           <div className="text-xs text-white/45">Sent</div>
+        </div>
+        <div className="card p-4 text-center">
+          <div className="text-2xl font-semibold text-emerald-300">
+            {stats.deliveredCount}
+          </div>
+          <div className="text-xs text-white/45">Delivered</div>
+        </div>
+        <div className="card p-4 text-center">
+          <div className="text-2xl font-semibold text-sky-300">{stats.openedCount}</div>
+          <div className="text-xs text-white/45">Opened</div>
         </div>
         <div className="card p-4 text-center">
           <div className="text-2xl font-semibold text-rose-300">{stats.failedCount}</div>
@@ -149,14 +186,22 @@ export default function InboxPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(['all', 'SENT', 'FAILED'] as const).map((s) => (
+        {(['all', 'SENT', 'DELIVERED', 'OPENED', 'FAILED'] as const).map((s) => (
           <button
             key={s}
             type="button"
             className={status === s ? 'btn-primary' : 'btn-secondary'}
             onClick={() => setStatus(s)}
           >
-            {s === 'all' ? 'All' : s === 'SENT' ? 'Sent' : 'Failed'}
+            {s === 'all'
+              ? 'All'
+              : s === 'SENT'
+                ? 'Sent'
+                : s === 'DELIVERED'
+                  ? 'Delivered'
+                  : s === 'OPENED'
+                    ? 'Opened'
+                    : 'Failed'}
           </button>
         ))}
         <input
@@ -176,9 +221,7 @@ export default function InboxPage() {
 
       {needsSetup ? (
         <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-50">
-          <p className="mb-3">
-            Database table for Sent inbox is missing. Create it once:
-          </p>
+          <p className="mb-3">Database table for Sent inbox is missing. Create it once:</p>
           <button
             type="button"
             className="btn-primary"
@@ -196,6 +239,13 @@ export default function InboxPage() {
         </div>
       ) : null}
 
+      <p className="text-xs text-white/40">
+        Opens update when the recipient loads images (HTML) or clicks a link. Set{' '}
+        <code className="text-white/60">APP_URL</code> or{' '}
+        <code className="text-white/60">NEXTAUTH_URL</code> to your live HTTPS domain.
+        Auto-refresh every 20s.
+      </p>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="card overflow-hidden lg:col-span-3">
           {loading ? (
@@ -212,37 +262,39 @@ export default function InboxPage() {
                     <th className="px-4 py-2">When</th>
                     <th className="px-4 py-2">To</th>
                     <th className="px-4 py-2">Subject</th>
-                    <th className="px-4 py-2">Status</th>
+                    <th className="px-4 py-2">Event</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {items.map((item) => (
-                    <tr
-                      key={item.id}
-                      className={
-                        'cursor-pointer hover:bg-white/5 ' +
-                        (selected?.id === item.id ? 'bg-fuchsia-500/10' : '')
-                      }
-                      onClick={() => setSelected(item)}
-                    >
-                      <td className="whitespace-nowrap px-4 py-2 text-xs text-white/45">
-                        {new Date(item.createdAt).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2 font-mono text-xs text-fuchsia-200">
-                        {item.toEmail}
-                      </td>
-                      <td className="max-w-[200px] truncate px-4 py-2 text-white/80">
-                        {item.subject}
-                      </td>
-                      <td className="px-4 py-2 text-xs">
-                        {item.status === 'SENT' ? (
-                          <span className="text-emerald-300">Sent</span>
-                        ) : (
-                          <span className="text-rose-300">Failed</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {items.map((item) => {
+                    const st = statusLabel(item);
+                    return (
+                      <tr
+                        key={item.id}
+                        className={
+                          'cursor-pointer hover:bg-white/5 ' +
+                          (selected?.id === item.id ? 'bg-fuchsia-500/10' : '')
+                        }
+                        onClick={() => setSelected(item)}
+                      >
+                        <td className="whitespace-nowrap px-4 py-2 text-xs text-white/45">
+                          {new Date(item.createdAt).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-2 font-mono text-xs text-fuchsia-200">
+                          {item.toEmail}
+                        </td>
+                        <td className="max-w-[200px] truncate px-4 py-2 text-white/80">
+                          {item.subject}
+                        </td>
+                        <td className={`px-4 py-2 text-xs font-medium ${st.className}`}>
+                          {st.text}
+                          {item.openCount && item.openCount > 0
+                            ? ` · ${item.openCount}`
+                            : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -262,8 +314,11 @@ export default function InboxPage() {
                   Delete
                 </button>
               </div>
-              <Row label="Status" value={selected.status} />
-              <Row label="From" value={selected.fromName || 'BOA'} />
+              <Row label="Status" value={statusLabel(selected).text} />
+              {selected.lastEvent ? (
+                <Row label="Last event" value={selected.lastEvent} />
+              ) : null}
+              <Row label="From" value={selected.fromName || 'CryptoByt'} />
               <Row label="To" value={selected.toEmail} />
               {selected.toName ? <Row label="Name" value={selected.toName} /> : null}
               <Row label="Subject" value={selected.subject} />
@@ -271,6 +326,15 @@ export default function InboxPage() {
                 label="When"
                 value={new Date(selected.createdAt).toLocaleString()}
               />
+              {selected.openedAt ? (
+                <Row
+                  label="Opened at"
+                  value={new Date(selected.openedAt).toLocaleString()}
+                />
+              ) : null}
+              {selected.openCount ? (
+                <Row label="Open count" value={String(selected.openCount)} />
+              ) : null}
               {selected.mode ? <Row label="Mode" value={selected.mode} /> : null}
               {selected.messageId ? (
                 <Row label="Message-ID" value={selected.messageId} />
