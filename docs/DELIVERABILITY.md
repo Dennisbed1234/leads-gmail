@@ -1,4 +1,4 @@
-# BOA / BIG OLD ALPS — Email deliverability
+# C / CryptoByt — Email deliverability
 
 Code headers help a little. **DNS authentication decides most spam scores.**
 
@@ -7,7 +7,7 @@ Code headers help a little. **DNS authentication decides most spam scores.**
 Typical failures:
 
 1. **No SPF / DKIM / DMARC** on the From domain  
-2. **From domain ≠ SMTP domain** (e.g. From `boa@company.com` but sending via Gmail)  
+2. **From domain ≠ SMTP domain** (e.g. From `cryptobyt@company.com` but sending via Gmail)  
 3. Free **Gmail** SMTP for cold outreach (weak reputation)  
 4. Spammy content (ALL CAPS, “CLICK NOW”, only images, no plain text)  
 5. Sending **too many too fast** from a new domain
@@ -17,13 +17,13 @@ Typical failures:
 ### 1. Use your company domain as From
 
 ```
-SMTP_FROM=boa@yourdomain.com
-SMTP_FROM_NAME=BOA
+SMTP_FROM=cryptobyt@yourdomain.com
+SMTP_FROM_NAME=CryptoByt
 SMTP_USER=… (account on that domain’s SMTP)
 SMTP_HOST=… (your host / Workspace / Microsoft 365 / ESP)
 ```
 
-Do **not** put `BOA` as the email local-part only in the display name while From is still `@gmail.com` if you want company reputation — align them.
+Do **not** put `CryptoByt` as the email local-part only in the display name while From is still `@gmail.com` if you want company reputation — align them.
 
 ### 2. DNS records (at your domain registrar)
 
@@ -59,7 +59,7 @@ Also check: MXToolbox blacklist, Google Postmaster Tools (after volume).
 
 ## What this app already does
 
-- Display name **BOA**  
+- Display name **CryptoByt**  
 - Multipart text + HTML  
 - Message-ID, Date, UTF-8  
 - List-Unsubscribe (if `SMTP_UNSUBSCRIBE_URL` set)  
