@@ -15,10 +15,26 @@ function isMissingTableError(error: any): boolean {
   );
 }
 
+async function loadStats() {
+  const [total, sentCount, failedCount, deliveredCount, openedCount] =
+    await Promise.all([
+      prisma.sentEmail.count(),
+      prisma.sentEmail.count({
+        where: { status: { in: ['SENT', 'DELIVERED', 'OPENED'] } },
+      }),
+      prisma.sentEmail.count({ where: { status: 'FAILED' } }),
+      prisma.sentEmail.count({
+        where: { status: { in: ['DELIVERED', 'OPENED'] } },
+      }),
+      prisma.sentEmail.count({ where: { status: 'OPENED' } }),
+    ]);
+  return { total, sentCount, failedCount, deliveredCount, openedCount };
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status'); // SENT | FAILED | all
+    const status = searchParams.get('status'); // SENT | FAILED | DELIVERED | OPENED | all
     const q = (searchParams.get('q') || '').trim().toLowerCase();
     const take = Math.min(
       Math.max(Number(searchParams.get('limit')) || 100, 1),
@@ -46,8 +62,14 @@ export async function GET(request: Request) {
     }
 
     const where: any = {};
-    if (status === 'SENT' || status === 'FAILED') {
-      where.status = status;
+    if (status === 'FAILED') {
+      where.status = 'FAILED';
+    } else if (status === 'OPENED') {
+      where.status = 'OPENED';
+    } else if (status === 'DELIVERED') {
+      where.status = { in: ['DELIVERED', 'OPENED'] };
+    } else if (status === 'SENT') {
+      where.status = { in: ['SENT', 'DELIVERED', 'OPENED'] };
     }
     if (q) {
       where.OR = [
@@ -58,28 +80,25 @@ export async function GET(request: Request) {
     }
 
     try {
-      const [items, total, sentCount, failedCount] = await Promise.all([
+      const [items, filteredTotal, stats] = await Promise.all([
         prisma.sentEmail.findMany({
           where,
           orderBy: { createdAt: 'desc' },
           take,
         }),
         prisma.sentEmail.count({ where }),
-        prisma.sentEmail.count({ where: { status: 'SENT' } }),
-        prisma.sentEmail.count({ where: { status: 'FAILED' } }),
+        loadStats(),
       ]);
 
       return NextResponse.json({
         success: true,
-        total,
-        sentCount,
-        failedCount,
+        total: filteredTotal,
+        ...stats,
         items,
       });
     } catch (inner: any) {
       if (!isMissingTableError(inner)) throw inner;
 
-      // Auto-create table once, then retry
       const ensured = await ensureSentEmailTable();
       if (!ensured.ok) {
         return NextResponse.json({
@@ -87,6 +106,8 @@ export async function GET(request: Request) {
           total: 0,
           sentCount: 0,
           failedCount: 0,
+          deliveredCount: 0,
+          openedCount: 0,
           items: [],
           needsSetup: true,
           note:
@@ -95,22 +116,20 @@ export async function GET(request: Request) {
         });
       }
 
-      const [items, total, sentCount, failedCount] = await Promise.all([
+      const [items, filteredTotal, stats] = await Promise.all([
         prisma.sentEmail.findMany({
           where,
           orderBy: { createdAt: 'desc' },
           take,
         }),
         prisma.sentEmail.count({ where }),
-        prisma.sentEmail.count({ where: { status: 'SENT' } }),
-        prisma.sentEmail.count({ where: { status: 'FAILED' } }),
+        loadStats(),
       ]);
 
       return NextResponse.json({
         success: true,
-        total,
-        sentCount,
-        failedCount,
+        total: filteredTotal,
+        ...stats,
         items,
         note: 'SentEmail table was created automatically.',
       });
