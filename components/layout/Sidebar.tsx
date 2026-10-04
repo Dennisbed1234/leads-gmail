@@ -45,7 +45,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 via-fuchsia-500 to-indigo-500 text-sm font-bold text-white shadow-lg shadow-fuchsia-500/30">
-              BOA
+              CryptoByt
             </div>
             <div>
               <div className="text-sm font-bold tracking-tight text-white">
@@ -97,7 +97,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           <div className="rounded-xl border border-white/10 bg-gradient-to-br from-fuchsia-500/10 to-cyan-500/10 px-3 py-3">
             <div className="text-xs font-semibold text-white">BIG OLD ALPS</div>
             <div className="mt-0.5 text-[11px] text-white/45">
-              Sent as BOA · Campaign monitor
+              Sent as CryptoByt · Campaign monitor
             </div>
           </div>
         </div>
