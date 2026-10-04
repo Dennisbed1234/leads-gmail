@@ -29,7 +29,6 @@ export default function AppShell({
     };
   }, [sidebarOpen]);
 
-  // Scroll-triggered reveal for .reveal elements
   useEffect(() => {
     const els = () => Array.from(document.querySelectorAll('.reveal'));
 
@@ -50,7 +49,6 @@ export default function AppShell({
 
     observeAll();
 
-    // Re-scan when route content changes
     const mo = new MutationObserver(() => observeAll());
     mo.observe(document.body, { childList: true, subtree: true });
 
@@ -102,7 +100,7 @@ export default function AppShell({
           </svg>
         </button>
         <span className="bg-gradient-to-r from-rose-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-sm font-bold text-transparent">
-          LeadBot Pro
+          CryptoByt
         </span>
       </header>
 
