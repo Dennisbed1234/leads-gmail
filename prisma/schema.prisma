@@ -19,13 +19,11 @@ model Lead {
   source      String   @default("SEC EDGAR")
   score       Int      @default(50)
 
-  // Store tags as JSON string
   tags        String?
 
   notes       String?
   status      String   @default("NEW")
 
-  // SEC-specific fields
   cik         String?
   filingDate  String?
   filingType  String?
@@ -58,21 +56,26 @@ model Company {
   @@index([ticker])
 }
 
-// Outbox / sent monitor for campaign emails
+// Outbox / sent monitor — events mirror Resend last_event style
 model SentEmail {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   toEmail     String
   toName      String?
   subject     String
   bodySnippet String?
-  status      String   @default("SENT") // SENT | FAILED
+  status      String    @default("SENT") // SENT | DELIVERED | OPENED | FAILED
   messageId   String?
   error       String?
-  mode        String?  // manual | leads
-  isHtml      Boolean  @default(true)
+  mode        String?
+  isHtml      Boolean   @default(true)
   fromName    String?
 
-  createdAt   DateTime @default(now())
+  deliveredAt DateTime?
+  openedAt    DateTime?
+  openCount   Int       @default(0)
+  lastEvent   String?   // sent | delivered | opened | clicked | failed
+
+  createdAt   DateTime  @default(now())
 
   @@index([toEmail])
   @@index([status])
