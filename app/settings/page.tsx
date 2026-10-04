@@ -38,7 +38,7 @@ export default function SettingsPage() {
           </div>
           <p className="mt-2 text-sm text-slate-600">
             Example:{' '}
-            <span className="font-mono text-xs">LeadBot Pro (you@domain.com)</span>
+            <span className="font-mono text-xs">CryptoByt (you@domain.com)</span>
           </p>
         </div>
 
