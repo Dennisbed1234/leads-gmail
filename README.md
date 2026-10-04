@@ -1,6 +1,6 @@
-#BOA
+# CryptoByt
 
-Extract executives from SEC EDGAR filings and generate/verify likely Gmail addresses.
+Lead outreach platform: extract executives from SEC EDGAR filings, generate/verify emails, and run campaigns.
 
 ## Important: Vercel Setup
 
@@ -11,7 +11,7 @@ Extract executives from SEC EDGAR filings and generate/verify likely Gmail addre
 
 2. **SEC User-Agent (required)**  
    Set `SEC_USER_AGENT` to something like:  
-   `YourAppName (your-email@domain.com)`  
+   `CryptoByt (your-email@domain.com)`  
    SEC blocks requests without a proper User-Agent.
 
 3. Redeploy after setting env vars.
@@ -34,8 +34,7 @@ npm run dev
 4. Verify format + MX (true Gmail account existence requires paid verification APIs)
 5. Save only verified candidates to the database
 
-## Notes on "verification"
+## Notes on verification
 
 Google does not provide a public API to check if a Gmail address exists.  
-The previous implementation used a dead endpoint and broken scoring that made *every* address fail verification.  
-This is now fixed so format-valid @gmail.com addresses pass and can be saved as leads.
+Format-valid @gmail.com addresses pass and can be saved as leads; use ZeroBounce (or similar) for full mailbox verification.
