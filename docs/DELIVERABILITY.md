@@ -1,4 +1,4 @@
-# C / CryptoByt — Email deliverability
+# CryptoByt — Email deliverability
 
 Code headers help a little. **DNS authentication decides most spam scores.**
 
