@@ -3,9 +3,9 @@ import './globals.css';
 import AppShell from '@/components/layout/AppShell';
 
 export const metadata: Metadata = {
-  title: 'LeadBot Pro — SEC EDGAR Lead Generator',
+  title: 'CryptoByt — Lead outreach',
   description:
-    'Extract executives from SEC filings and generate verified Gmail addresses',
+    'Extract executives, verify emails, and run outreach campaigns with CryptoByt',
 };
 
 export default function RootLayout({
