@@ -34,11 +34,12 @@ async function loadStats() {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status'); // SENT | FAILED | DELIVERED | OPENED | all
+    const status = searchParams.get('status');
     const q = (searchParams.get('q') || '').trim().toLowerCase();
+    // Load as many as possible (safety ceiling only for memory)
     const take = Math.min(
-      Math.max(Number(searchParams.get('limit')) || 100, 1),
-      500
+      Math.max(Number(searchParams.get('limit')) || 50000, 1),
+      50000
     );
     const setup = searchParams.get('setup') === '1';
 
@@ -93,6 +94,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         success: true,
         total: filteredTotal,
+        loaded: items.length,
         ...stats,
         items,
       });
@@ -129,6 +131,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         success: true,
         total: filteredTotal,
+        loaded: items.length,
         ...stats,
         items,
         note: 'SentEmail table was created automatically.',
