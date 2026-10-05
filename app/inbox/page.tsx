@@ -59,7 +59,7 @@ export default function InboxPage() {
       const params = new URLSearchParams();
       if (status !== 'all') params.set('status', status);
       if (q.trim()) params.set('q', q.trim());
-      params.set('limit', '200');
+      params.set('limit', '50000');
 
       const res = await fetch('/api/inbox?' + params.toString());
       const data = await res.json();
@@ -148,6 +148,7 @@ export default function InboxPage() {
           <h1 className="page-title">Sent inbox</h1>
           <p className="page-subtitle">
             Sent → Delivered → Opened
+            {items.length > 0 ? ` · showing ${items.length.toLocaleString()}` : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -241,16 +242,16 @@ export default function InboxPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="card overflow-hidden lg:col-span-3">
-          {loading ? (
+          {loading && items.length === 0 ? (
             <div className="p-6 text-sm text-white/50">Loading…</div>
           ) : items.length === 0 ? (
             <div className="p-6 text-sm text-white/50">
               No sent messages yet. Run a campaign and they will appear here.
             </div>
           ) : (
-            <div className="max-h-[560px] overflow-auto">
+            <div className="max-h-[min(80vh,900px)] overflow-auto">
               <table className="w-full text-left text-sm">
-                <thead className="sticky top-0 bg-[#1a0f2e] text-xs uppercase text-white/45">
+                <thead className="sticky top-0 z-10 bg-[#1a0f2e] text-xs uppercase text-white/45">
                   <tr>
                     <th className="px-4 py-2">When</th>
                     <th className="px-4 py-2">To</th>
