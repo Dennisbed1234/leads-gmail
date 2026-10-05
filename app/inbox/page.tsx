@@ -39,6 +39,7 @@ export default function InboxPage() {
   const [status, setStatus] = useState<
     'all' | 'SENT' | 'DELIVERED' | 'OPENED' | 'FAILED'
   >('all');
+  const [days, setDays] = useState<0 | 1 | 2 | 3 | 7>(0);
   const [q, setQ] = useState('');
   const [stats, setStats] = useState({
     total: 0,
@@ -58,6 +59,7 @@ export default function InboxPage() {
     try {
       const params = new URLSearchParams();
       if (status !== 'all') params.set('status', status);
+      if (days > 0) params.set('days', String(days));
       if (q.trim()) params.set('q', q.trim());
       params.set('limit', '50000');
 
@@ -79,7 +81,7 @@ export default function InboxPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, q]);
+  }, [status, days, q]);
 
   useEffect(() => {
     load();
@@ -141,13 +143,20 @@ export default function InboxPage() {
     }
   };
 
+  const periodLabel =
+    days === 0
+      ? 'All time'
+      : days === 1
+        ? 'Last 1 day'
+        : `Last ${days} days`;
+
   return (
     <div className="space-y-6">
       <div className="page-header flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="page-title">Sent inbox</h1>
           <p className="page-subtitle">
-            Sent → Delivered → Opened
+            Sent → Delivered → Opened · {periodLabel}
             {items.length > 0 ? ` · showing ${items.length.toLocaleString()}` : ''}
           </p>
         </div>
@@ -164,7 +173,7 @@ export default function InboxPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="card p-4 text-center">
           <div className="text-2xl font-semibold text-white">{stats.total}</div>
-          <div className="text-xs text-white/45">Total</div>
+          <div className="text-xs text-white/45">Total ({periodLabel})</div>
         </div>
         <div className="card p-4 text-center">
           <div className="text-2xl font-semibold text-white/80">{stats.sentCount}</div>
@@ -186,7 +195,7 @@ export default function InboxPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
         {(['all', 'SENT', 'DELIVERED', 'OPENED', 'FAILED'] as const).map((s) => (
           <button
             key={s}
@@ -205,6 +214,20 @@ export default function InboxPage() {
                     : 'Failed'}
           </button>
         ))}
+
+        <select
+          className="input max-w-[160px]"
+          value={days}
+          onChange={(e) => setDays(Number(e.target.value) as 0 | 1 | 2 | 3 | 7)}
+          title="Show emails from the last N days"
+        >
+          <option value={0}>All time</option>
+          <option value={1}>Last 1 day</option>
+          <option value={2}>Last 2 days</option>
+          <option value={3}>Last 3 days</option>
+          <option value={7}>Last 7 days</option>
+        </select>
+
         <input
           className="input max-w-xs"
           placeholder="Search email or subject…"
@@ -246,7 +269,7 @@ export default function InboxPage() {
             <div className="p-6 text-sm text-white/50">Loading…</div>
           ) : items.length === 0 ? (
             <div className="p-6 text-sm text-white/50">
-              No sent messages yet. Run a campaign and they will appear here.
+              No messages for this filter. Try All time or another day range.
             </div>
           ) : (
             <div className="max-h-[min(80vh,900px)] overflow-auto">
