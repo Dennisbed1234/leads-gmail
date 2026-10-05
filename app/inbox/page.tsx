@@ -83,7 +83,7 @@ export default function InboxPage() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 20000);
+    const t = setInterval(load, 60000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -147,7 +147,7 @@ export default function InboxPage() {
         <div>
           <h1 className="page-title">Sent inbox</h1>
           <p className="page-subtitle">
-            Sent → Delivered → Opened (same event style as Inbox-Mailer / Resend)
+            Sent → Delivered → Opened
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -238,13 +238,6 @@ export default function InboxPage() {
           {error}
         </div>
       ) : null}
-
-      <p className="text-xs text-white/40">
-        Opens update when the recipient loads images (HTML) or clicks a link. Set{' '}
-        <code className="text-white/60">APP_URL</code> or{' '}
-        <code className="text-white/60">NEXTAUTH_URL</code> to your live HTTPS domain.
-        Auto-refresh every 20s.
-      </p>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="card overflow-hidden lg:col-span-3">
