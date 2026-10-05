@@ -1,169 +1,198 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from 'recharts';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 
-interface Lead {
-  id: string;
-  name: string;
-  company?: string;
-  score: number;
-  status: string;
-}
+type Totals = {
+  total: number;
+  sent: number;
+  failed: number;
+  delivered: number;
+  opened: number;
+  today: number;
+  last7: number;
+  uniqueContacts: number;
+  openRate: number;
+  failRate: number;
+};
+
+type DayRow = { date: string; sent: number; opened: number; failed: number };
+type DomainRow = { name: string; count: number };
 
 export default function AnalyticsPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [totals, setTotals] = useState<Totals | null>(null);
+  const [byDay, setByDay] = useState<DayRow[]>([]);
+  const [topDomains, setTopDomains] = useState<DomainRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetch('/api/leads')
-      .then((res) => res.json())
-      .then((data) => {
-        setLeads(data.leads || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/analytics');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load');
+      setTotals(data.totals || null);
+      setByDay(data.byDay || []);
+      setTopDomains(data.topDomains || []);
+    } catch (e: any) {
+      setError(e.message || 'Failed to load analytics');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const avgScore = useMemo(() => {
-    if (!leads.length) return 0;
-    return Math.round(
-      leads.reduce((acc, l) => acc + (l.score || 0), 0) / leads.length
-    );
-  }, [leads]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const uniqueCompanies = useMemo(
-    () => new Set(leads.map((l) => l.company).filter(Boolean)).size,
-    [leads]
-  );
-
-  const scoreBuckets = useMemo(() => {
-    const buckets = [
-      { range: '0–49', count: 0 },
-      { range: '50–69', count: 0 },
-      { range: '70–84', count: 0 },
-      { range: '85–100', count: 0 },
-    ];
-
-    for (const l of leads) {
-      const s = l.score || 0;
-      if (s < 50) buckets[0].count++;
-      else if (s < 70) buckets[1].count++;
-      else if (s < 85) buckets[2].count++;
-      else buckets[3].count++;
-    }
-
-    return buckets;
-  }, [leads]);
-
-  const topCompanies = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const l of leads) {
-      const key = l.company || 'Unknown';
-      map.set(key, (map.get(key) || 0) + 1);
-    }
-    return Array.from(map.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-  }, [leads]);
-
-  if (loading) {
-    return (
-      <div className="py-32 text-center text-sm text-slate-500">
-        Loading analytics…
-      </div>
-    );
-  }
+  const maxDay = Math.max(1, ...byDay.map((d) => d.sent + d.failed));
 
   return (
-    <div>
-      <div className="page-header">
-        <h1 className="page-title">Analytics</h1>
-        <p className="page-subtitle">Score distribution and company coverage</p>
+    <div className="space-y-6">
+      <div className="page-header flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="page-title">Analytics</h1>
+          <p className="page-subtitle">
+            Live stats from Sent inbox · opens, delivery, volume
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/inbox" className="btn-secondary">
+            Sent inbox
+          </Link>
+          <Link href="/contacts" className="btn-secondary">
+            Contacts
+          </Link>
+          <button type="button" className="btn-secondary" onClick={load}>
+            Refresh
+          </button>
+        </div>
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="card p-5">
-          <p className="text-sm text-slate-500">Total leads</p>
-          <p className="text-2xl font-semibold text-slate-900">{leads.length}</p>
+      {error ? (
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+          {error}
         </div>
-        <div className="card p-5">
-          <p className="text-sm text-slate-500">Average score</p>
-          <p className="text-2xl font-semibold text-slate-900">{avgScore}</p>
-        </div>
-        <div className="card p-5">
-          <p className="text-sm text-slate-500">Companies</p>
-          <p className="text-2xl font-semibold text-slate-900">{uniqueCompanies}</p>
-        </div>
-      </div>
+      ) : null}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="card p-6">
-          <h2 className="mb-4 text-sm font-semibold text-slate-900">
-            Score distribution
-          </h2>
-          {leads.length === 0 ? (
-            <p className="py-12 text-center text-sm text-slate-400">No data yet</p>
-          ) : (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={scoreBuckets}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="range" tick={{ fontSize: 12 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: 8,
-                      border: '1px solid #e2e8f0',
-                      fontSize: 13,
-                    }}
-                  />
-                  <Bar dataKey="count" fill="#4f46e5" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
+      {loading && !totals ? (
+        <p className="text-sm text-white/50">Loading analytics…</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <Stat label="Total logged" value={totals?.total ?? 0} />
+            <Stat label="Sent / delivered" value={totals?.sent ?? 0} tone="ok" />
+            <Stat label="Opened" value={totals?.opened ?? 0} tone="sky" />
+            <Stat label="Failed" value={totals?.failed ?? 0} tone="bad" />
+            <Stat label="Open rate" value={`${totals?.openRate ?? 0}%`} tone="sky" />
+            <Stat label="Unique contacts" value={totals?.uniqueContacts ?? 0} />
+          </div>
 
-        <div className="card p-6">
-          <h2 className="mb-4 text-sm font-semibold text-slate-900">
-            Top companies
-          </h2>
-          {topCompanies.length === 0 ? (
-            <p className="py-12 text-center text-sm text-slate-400">No data yet</p>
-          ) : (
-            <div className="space-y-3">
-              {topCompanies.map((c) => {
-                const max = topCompanies[0]?.count || 1;
-                const pct = Math.round((c.count / max) * 100);
-                return (
-                  <div key={c.name}>
-                    <div className="mb-1 flex items-center justify-between text-sm">
-                      <span className="truncate text-slate-700">{c.name}</span>
-                      <span className="font-medium text-slate-900">{c.count}</span>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+            <Stat label="Sent today (24h)" value={totals?.today ?? 0} />
+            <Stat label="Sent last 7 days" value={totals?.last7 ?? 0} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="card p-5">
+              <h2 className="mb-4 text-sm font-semibold text-white">
+                Volume · last 7 days
+              </h2>
+              {byDay.every((d) => d.sent === 0 && d.failed === 0) ? (
+                <p className="py-10 text-center text-sm text-white/40">
+                  No sends in the last 7 days
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {byDay.map((d) => (
+                    <div key={d.date}>
+                      <div className="mb-1 flex justify-between text-xs text-white/50">
+                        <span>{d.date}</span>
+                        <span>
+                          {d.sent} sent · {d.opened} opened · {d.failed} failed
+                        </span>
+                      </div>
+                      <div className="flex h-2 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="bg-emerald-400/80"
+                          style={{
+                            width: `${Math.round((d.sent / maxDay) * 100)}%`,
+                          }}
+                        />
+                        <div
+                          className="bg-rose-400/70"
+                          style={{
+                            width: `${Math.round((d.failed / maxDay) * 100)}%`,
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-full rounded-full bg-indigo-500"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+
+            <div className="card p-5">
+              <h2 className="mb-4 text-sm font-semibold text-white">
+                Top domains (7 days)
+              </h2>
+              {topDomains.length === 0 ? (
+                <p className="py-10 text-center text-sm text-white/40">
+                  No domain data yet
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {topDomains.map((d) => {
+                    const max = topDomains[0]?.count || 1;
+                    const pct = Math.round((d.count / max) * 100);
+                    return (
+                      <div key={d.name}>
+                        <div className="mb-1 flex justify-between text-sm">
+                          <span className="truncate text-white/80">{d.name}</span>
+                          <span className="text-fuchsia-200">{d.count}</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-fuchsia-500/80"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  tone?: 'ok' | 'bad' | 'sky';
+}) {
+  const color =
+    tone === 'ok'
+      ? 'text-emerald-300'
+      : tone === 'bad'
+        ? 'text-rose-300'
+        : tone === 'sky'
+          ? 'text-sky-300'
+          : 'text-white';
+  return (
+    <div className="card p-4 text-center">
+      <div className={`text-2xl font-semibold ${color}`}>{value}</div>
+      <div className="text-xs text-white/45">{label}</div>
     </div>
   );
 }
