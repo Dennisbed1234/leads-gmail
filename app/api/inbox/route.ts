@@ -15,18 +15,36 @@ function isMissingTableError(error: any): boolean {
   );
 }
 
-async function loadStats() {
+function sinceDate(days: number): Date | null {
+  if (!days || days <= 0) return null;
+  const d = new Date();
+  d.setTime(d.getTime() - days * 24 * 60 * 60 * 1000);
+  return d;
+}
+
+async function loadStats(dateWhere: any) {
+  const base = dateWhere || {};
   const [total, sentCount, failedCount, deliveredCount, openedCount] =
     await Promise.all([
-      prisma.sentEmail.count(),
+      prisma.sentEmail.count({ where: base }),
       prisma.sentEmail.count({
-        where: { status: { in: ['SENT', 'DELIVERED', 'OPENED'] } },
+        where: {
+          ...base,
+          status: { in: ['SENT', 'DELIVERED', 'OPENED'] },
+        },
       }),
-      prisma.sentEmail.count({ where: { status: 'FAILED' } }),
       prisma.sentEmail.count({
-        where: { status: { in: ['DELIVERED', 'OPENED'] } },
+        where: { ...base, status: 'FAILED' },
       }),
-      prisma.sentEmail.count({ where: { status: 'OPENED' } }),
+      prisma.sentEmail.count({
+        where: {
+          ...base,
+          status: { in: ['DELIVERED', 'OPENED'] },
+        },
+      }),
+      prisma.sentEmail.count({
+        where: { ...base, status: 'OPENED' },
+      }),
     ]);
   return { total, sentCount, failedCount, deliveredCount, openedCount };
 }
@@ -36,7 +54,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const q = (searchParams.get('q') || '').trim().toLowerCase();
-    // Load as many as possible (safety ceiling only for memory)
+    const daysRaw = Number(searchParams.get('days') || 0);
+    const days = [1, 2, 3, 7, 14, 30].includes(daysRaw) ? daysRaw : 0;
     const take = Math.min(
       Math.max(Number(searchParams.get('limit')) || 50000, 1),
       50000
@@ -62,7 +81,10 @@ export async function GET(request: Request) {
       });
     }
 
-    const where: any = {};
+    const since = sinceDate(days);
+    const dateWhere = since ? { createdAt: { gte: since } } : {};
+
+    const where: any = { ...dateWhere };
     if (status === 'FAILED') {
       where.status = 'FAILED';
     } else if (status === 'OPENED') {
@@ -88,13 +110,14 @@ export async function GET(request: Request) {
           take,
         }),
         prisma.sentEmail.count({ where }),
-        loadStats(),
+        loadStats(dateWhere),
       ]);
 
       return NextResponse.json({
         success: true,
         total: filteredTotal,
         loaded: items.length,
+        days: days || null,
         ...stats,
         items,
       });
@@ -125,13 +148,14 @@ export async function GET(request: Request) {
           take,
         }),
         prisma.sentEmail.count({ where }),
-        loadStats(),
+        loadStats(dateWhere),
       ]);
 
       return NextResponse.json({
         success: true,
         total: filteredTotal,
         loaded: items.length,
+        days: days || null,
         ...stats,
         items,
         note: 'SentEmail table was created automatically.',
