@@ -105,7 +105,7 @@ export default function ContactsPage() {
     try {
       const params = new URLSearchParams();
       if (q.trim()) params.set('q', q.trim());
-      params.set('limit', '3000');
+      params.set('limit', '10000');
       const res = await fetch('/api/contacts?' + params.toString());
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
@@ -565,13 +565,16 @@ export default function ContactsPage() {
                     <input
                       type="checkbox"
                       checked={
-                        orderedForMode.length > 0 &&
-                        selected.size >= orderedForMode.length
+                        contacts.length > 0 &&
+                        contacts.every((c) => selected.has(c.email))
                       }
-                      onChange={(e) =>
-                        e.target.checked ? selectAllEligible() : clearSelection()
-                      }
-                      aria-label="Select all eligible"
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelected(new Set(contacts.map((c) => c.email)));
+                        } else {
+                          clearSelection();
+                        }
+                      }}
                     />
                   </th>
                   <th className="px-3 py-2">Email</th>
@@ -582,64 +585,50 @@ export default function ContactsPage() {
                 </tr>
               </thead>
               <tbody>
-                {contacts.map((c) => {
-                  const isEligible = orderedForMode.some((e) => e.email === c.email);
-                  const isSelected = selected.has(c.email);
-                  const isSessionSent = sessionSent.has(c.email);
-                  return (
-                    <tr
-                      key={c.email}
-                      className={
-                        isSelected
-                          ? 'bg-fuchsia-500/10'
-                          : isSessionSent
-                            ? 'opacity-40'
-                            : 'hover:bg-white/5'
-                      }
-                    >
-                      <td className="px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggle(c.email)}
-                          disabled={!isEligible && !isSelected}
-                        />
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-white/90">
-                        {c.email}
-                      </td>
-                      <td className="px-3 py-2 text-white/70">{c.name || '—'}</td>
-                      <td className="px-3 py-2 text-white/50">{c.sendCount}</td>
-                      <td className="px-3 py-2 text-white/50 text-xs">
-                        {c.lastSentAt
-                          ? new Date(c.lastSentAt).toLocaleString()
-                          : '—'}
-                      </td>
-                      <td className="px-3 py-2 text-white/40 text-xs truncate max-w-[180px]">
-                        {c.lastSubject || '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {contacts.map((c) => (
+                  <tr
+                    key={c.email}
+                    className="border-t border-white/5 hover:bg-white/5"
+                  >
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(c.email)}
+                        onChange={() => toggle(c.email)}
+                      />
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-white/90">
+                      {c.email}
+                    </td>
+                    <td className="px-3 py-2 text-white/70">{c.name || '—'}</td>
+                    <td className="px-3 py-2 text-white/60">{c.sendCount}</td>
+                    <td className="px-3 py-2 text-xs text-white/50">
+                      {new Date(c.lastSentAt).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-white/45 truncate max-w-[180px]">
+                      {c.lastSubject || '—'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* Compose + send */}
+      {/* Composer */}
       <div className="card space-y-4 p-4">
-        <h2 className="text-lg font-semibold text-white">Send to selected</h2>
+        <h2 className="text-lg font-medium text-white">Compose & send to selected</h2>
         <div>
           <label className="label">Subject</label>
           <input
             className="input"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            placeholder="Subject line…"
+            placeholder="Your subject line…"
           />
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <label className="inline-flex items-center gap-2 text-sm text-white/70">
             <input
               type="checkbox"
@@ -650,7 +639,7 @@ export default function ContactsPage() {
           </label>
           <label className="inline-flex items-center gap-2 text-sm text-white/70">
             <input
-              type="checkbox"
+              type="checkbox"igurer
               checked={showPreview}
               onChange={(e) => setShowPreview(e.target.checked)}
             />
@@ -661,10 +650,10 @@ export default function ContactsPage() {
           <div>
             <label className="label">HTML body</label>
             <textarea
-              className="input min-h-[160px] font-mono text-xs"
+              className="input min-h-[160px] font-mono text-sm"
               value={htmlBody}
               onChange={(e) => setHtmlBody(e.target.value)}
-              placeholder="HTML email body. Tokens: {{name}} {{email}} {{company}} {{title}}"
+              placeholder="<p>Hello {{name}},</p>…"
             />
           </div>
         ) : (
@@ -674,12 +663,12 @@ export default function ContactsPage() {
               className="input min-h-[160px]"
               value={textBody}
               onChange={(e) => setTextBody(e.target.value)}
-              placeholder="Plain text body…"
+              placeholder="Hello {{name}},…"
             />
           </div>
         )}
         {showPreview && (htmlBody || textBody) ? (
-          <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white/70">
+          <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-white/70">
             <div className="mb-1 text-xs uppercase text-white/40">Preview</div>
             <div
               dangerouslySetInnerHTML={{
@@ -703,14 +692,13 @@ export default function ContactsPage() {
             disabled={sending || selected.size === 0}
             onClick={() => sendToSelected(true)}
           >
-            Dry run
+            Dry-run
           </button>
         </div>
         {result ? (
-          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
-            Sent: {result.sent ?? 0} · Failed: {result.failed ?? 0}
-            {result.error ? ` · ${result.error}` : ''}
-          </div>
+          <pre className="overflow-auto rounded-lg bg-black/30 p-3 text-xs text-white/70">
+            {JSON.stringify(result, null, 2)}
+          </pre>
         ) : null}
       </div>
     </div>
