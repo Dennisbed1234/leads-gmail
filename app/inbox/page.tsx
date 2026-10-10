@@ -35,6 +35,18 @@ function statusLabel(item: SentItem) {
   return { text: 'Sent', className: 'text-white/70' };
 }
 
+function uniqueEmails(items: SentItem[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const email = (item.toEmail || '').trim().toLowerCase();
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    out.push(item.toEmail.trim());
+  }
+  return out;
+}
+
 export default function InboxPage() {
   const [items, setItems] = useState<SentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +68,8 @@ export default function InboxPage() {
   const [note, setNote] = useState('');
   const [needsSetup, setNeedsSetup] = useState(false);
   const [setupLoading, setSetupLoading] = useState(false);
+  const [copyFormat, setCopyFormat] = useState<'newline' | 'comma' | 'semicolon'>('newline');
+  const [copyMsg, setCopyMsg] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -148,12 +162,59 @@ export default function InboxPage() {
     }
   };
 
+  const copyEmails = async () => {
+    const emails = uniqueEmails(items);
+    if (emails.length === 0) {
+      setCopyMsg('No emails to copy');
+      setTimeout(() => setCopyMsg(''), 2000);
+      return;
+    }
+    const sep =
+      copyFormat === 'comma' ? ', ' : copyFormat === 'semicolon' ? '; ' : '\n';
+    const text = emails.join(sep);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyMsg(`Copied ${emails.length} email${emails.length === 1 ? '' : 's'}`);
+    } catch {
+      // Fallback for older browsers / insecure context
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        setCopyMsg(`Copied ${emails.length} email${emails.length === 1 ? '' : 's'}`);
+      } catch {
+        setCopyMsg('Copy failed');
+      }
+    }
+    setTimeout(() => setCopyMsg(''), 2500);
+  };
+
   const periodLabel =
     days === 0
       ? 'All time'
       : days === 1
         ? 'Last 1 day'
         : `Last ${days} days`;
+
+  const filterLabel =
+    status === 'all'
+      ? 'All'
+      : status === 'SENT'
+        ? 'Sent'
+        : status === 'DELIVERED'
+          ? 'Delivered'
+          : status === 'OPENED'
+            ? 'Opened'
+            : status === 'CLICKED'
+              ? 'Clicked'
+              : 'Failed';
+
+  const emailCount = uniqueEmails(items).length;
 
   return (
     <div className="space-y-6">
@@ -246,6 +307,37 @@ export default function InboxPage() {
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && load()}
         />
+      </div>
+
+      {/* Copy emails bar */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+        <span className="text-xs text-white/50">
+          Copy from current filter ({filterLabel})
+        </span>
+        <select
+          className="input max-w-[150px] text-sm"
+          value={copyFormat}
+          onChange={(e) =>
+            setCopyFormat(e.target.value as 'newline' | 'comma' | 'semicolon')
+          }
+          title="How to separate emails when copying"
+        >
+          <option value="newline">One per line</option>
+          <option value="comma">Comma separated</option>
+          <option value="semicolon">Semicolon separated</option>
+        </select>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={copyEmails}
+          disabled={loading || emailCount === 0}
+          title={`Copy ${emailCount} unique email${emailCount === 1 ? '' : 's'} from the list below`}
+        >
+          Copy emails{emailCount > 0 ? ` (${emailCount})` : ''}
+        </button>
+        {copyMsg ? (
+          <span className="text-xs text-emerald-300">{copyMsg}</span>
+        ) : null}
       </div>
 
       {note ? (
