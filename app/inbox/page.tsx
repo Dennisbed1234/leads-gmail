@@ -18,6 +18,7 @@ type SentItem = {
   deliveredAt?: string | null;
   openedAt?: string | null;
   openCount?: number | null;
+  clickCount?: number | null;
   lastEvent?: string | null;
 };
 
@@ -25,7 +26,9 @@ function statusLabel(item: SentItem) {
   const s = (item.status || '').toUpperCase();
   const ev = (item.lastEvent || '').toLowerCase();
   if (s === 'FAILED' || ev === 'failed') return { text: 'Failed', className: 'text-rose-300' };
-  if (s === 'OPENED' || ev === 'opened' || ev === 'clicked')
+  if (ev === 'clicked' || (item.clickCount && item.clickCount > 0))
+    return { text: 'Clicked', className: 'text-violet-300' };
+  if (s === 'OPENED' || ev === 'opened')
     return { text: 'Opened', className: 'text-sky-300' };
   if (s === 'DELIVERED' || ev === 'delivered')
     return { text: 'Delivered', className: 'text-emerald-300' };
@@ -37,7 +40,7 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [status, setStatus] = useState<
-    'all' | 'SENT' | 'DELIVERED' | 'OPENED' | 'FAILED'
+    'all' | 'SENT' | 'DELIVERED' | 'OPENED' | 'CLICKED' | 'FAILED'
   >('all');
   const [days, setDays] = useState<0 | 1 | 2 | 3 | 7>(0);
   const [q, setQ] = useState('');
@@ -47,6 +50,7 @@ export default function InboxPage() {
     failedCount: 0,
     deliveredCount: 0,
     openedCount: 0,
+    clickedCount: 0,
   });
   const [selected, setSelected] = useState<SentItem | null>(null);
   const [note, setNote] = useState('');
@@ -73,6 +77,7 @@ export default function InboxPage() {
         failedCount: data.failedCount || 0,
         deliveredCount: data.deliveredCount || 0,
         openedCount: data.openedCount || 0,
+        clickedCount: data.clickedCount || 0,
       });
       setNote(data.note || '');
       setNeedsSetup(Boolean(data.needsSetup));
@@ -156,7 +161,7 @@ export default function InboxPage() {
         <div>
           <h1 className="page-title">Sent inbox</h1>
           <p className="page-subtitle">
-            Sent → Delivered → Opened · {periodLabel}
+            Sent → Delivered → Opened → Clicked · {periodLabel}
             {items.length > 0 ? ` · showing ${items.length.toLocaleString()}` : ''}
           </p>
         </div>
@@ -170,7 +175,7 @@ export default function InboxPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="card p-4 text-center">
           <div className="text-2xl font-semibold text-white">{stats.total}</div>
           <div className="text-xs text-white/45">Total ({periodLabel})</div>
@@ -190,13 +195,17 @@ export default function InboxPage() {
           <div className="text-xs text-white/45">Opened</div>
         </div>
         <div className="card p-4 text-center">
+          <div className="text-2xl font-semibold text-violet-300">{stats.clickedCount}</div>
+          <div className="text-xs text-white/45">Clicked</div>
+        </div>
+        <div className="card p-4 text-center">
           <div className="text-2xl font-semibold text-rose-300">{stats.failedCount}</div>
           <div className="text-xs text-white/45">Failed</div>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">
-        {(['all', 'SENT', 'DELIVERED', 'OPENED', 'FAILED'] as const).map((s) => (
+        {(['all', 'SENT', 'DELIVERED', 'OPENED', 'CLICKED', 'FAILED'] as const).map((s) => (
           <button
             key={s}
             type="button"
@@ -211,7 +220,9 @@ export default function InboxPage() {
                   ? 'Delivered'
                   : s === 'OPENED'
                     ? 'Opened'
-                    : 'Failed'}
+                    : s === 'CLICKED'
+                      ? 'Clicked'
+                      : 'Failed'}
           </button>
         ))}
 
@@ -305,9 +316,11 @@ export default function InboxPage() {
                         </td>
                         <td className={`px-4 py-2 text-xs font-medium ${st.className}`}>
                           {st.text}
-                          {item.openCount && item.openCount > 0
-                            ? ` · ${item.openCount}`
-                            : ''}
+                          {item.clickCount && item.clickCount > 0
+                            ? ` · ${item.clickCount}`
+                            : item.openCount && item.openCount > 0
+                              ? ` · ${item.openCount}`
+                              : ''}
                         </td>
                       </tr>
                     );
@@ -351,6 +364,9 @@ export default function InboxPage() {
               ) : null}
               {selected.openCount ? (
                 <Row label="Open count" value={String(selected.openCount)} />
+              ) : null}
+              {selected.clickCount != null && selected.clickCount > 0 ? (
+                <Row label="Click count" value={String(selected.clickCount)} />
               ) : null}
               {selected.mode ? <Row label="Mode" value={selected.mode} /> : null}
               {selected.messageId ? (

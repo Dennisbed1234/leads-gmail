@@ -24,7 +24,7 @@ function sinceDate(days: number): Date | null {
 
 async function loadStats(dateWhere: any) {
   const base = dateWhere || {};
-  const [total, sentCount, failedCount, deliveredCount, openedCount] =
+  const [total, sentCount, failedCount, deliveredCount, openedCount, clickedCount] =
     await Promise.all([
       prisma.sentEmail.count({ where: base }),
       prisma.sentEmail.count({
@@ -45,8 +45,18 @@ async function loadStats(dateWhere: any) {
       prisma.sentEmail.count({
         where: { ...base, status: 'OPENED' },
       }),
+      // Emails that have been clicked at least once (lastEvent or clickCount)
+      prisma.sentEmail.count({
+        where: {
+          ...base,
+          OR: [
+            { lastEvent: 'clicked' },
+            { clickCount: { gt: 0 } },
+          ],
+        },
+      }),
     ]);
-  return { total, sentCount, failedCount, deliveredCount, openedCount };
+  return { total, sentCount, failedCount, deliveredCount, openedCount, clickedCount };
 }
 
 export async function GET(request: Request) {
@@ -89,6 +99,11 @@ export async function GET(request: Request) {
       where.status = 'FAILED';
     } else if (status === 'OPENED') {
       where.status = 'OPENED';
+    } else if (status === 'CLICKED') {
+      where.OR = [
+        { lastEvent: 'clicked' },
+        { clickCount: { gt: 0 } },
+      ];
     } else if (status === 'DELIVERED') {
       where.status = { in: ['DELIVERED', 'OPENED'] };
     } else if (status === 'SENT') {
@@ -96,6 +111,7 @@ export async function GET(request: Request) {
     }
     if (q) {
       where.OR = [
+        ...(where.OR || []),
         { toEmail: { contains: q, mode: 'insensitive' } },
         { toName: { contains: q, mode: 'insensitive' } },
         { subject: { contains: q, mode: 'insensitive' } },
@@ -133,6 +149,7 @@ export async function GET(request: Request) {
           failedCount: 0,
           deliveredCount: 0,
           openedCount: 0,
+          clickedCount: 0,
           items: [],
           needsSetup: true,
           note:

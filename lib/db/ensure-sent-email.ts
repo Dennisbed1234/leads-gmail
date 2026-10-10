@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 
 /**
- * Creates the SentEmail table if missing and adds open-tracking columns.
+ * Creates the SentEmail table if missing and adds open/click-tracking columns.
  */
 export async function ensureSentEmailTable(): Promise<{
   ok: boolean;
@@ -26,6 +26,7 @@ export async function ensureSentEmailTable(): Promise<{
         "deliveredAt" TIMESTAMP(3),
         "openedAt" TIMESTAMP(3),
         "openCount" INTEGER NOT NULL DEFAULT 0,
+        "clickCount" INTEGER NOT NULL DEFAULT 0,
         "lastEvent" TEXT,
         CONSTRAINT "SentEmail_pkey" PRIMARY KEY ("id")
       )
@@ -40,6 +41,9 @@ export async function ensureSentEmailTable(): Promise<{
     );
     await prisma.$executeRawUnsafe(
       `ALTER TABLE "SentEmail" ADD COLUMN IF NOT EXISTS "openCount" INTEGER NOT NULL DEFAULT 0`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "SentEmail" ADD COLUMN IF NOT EXISTS "clickCount" INTEGER NOT NULL DEFAULT 0`
     );
     await prisma.$executeRawUnsafe(
       `ALTER TABLE "SentEmail" ADD COLUMN IF NOT EXISTS "lastEvent" TEXT`

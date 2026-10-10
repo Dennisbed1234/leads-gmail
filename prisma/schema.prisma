@@ -73,6 +73,7 @@ model SentEmail {
   deliveredAt DateTime?
   openedAt    DateTime?
   openCount   Int       @default(0)
+  clickCount  Int       @default(0)
   lastEvent   String?   // sent | delivered | opened | clicked | failed
 
   createdAt   DateTime  @default(now())
