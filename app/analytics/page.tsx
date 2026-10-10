@@ -9,14 +9,22 @@ type Totals = {
   failed: number;
   delivered: number;
   opened: number;
+  clicked: number;
   today: number;
   last7: number;
   uniqueContacts: number;
   openRate: number;
+  clickRate: number;
   failRate: number;
 };
 
-type DayRow = { date: string; sent: number; opened: number; failed: number };
+type DayRow = {
+  date: string;
+  sent: number;
+  opened: number;
+  clicked: number;
+  failed: number;
+};
 type DomainRow = { name: string; count: number };
 
 export default function AnalyticsPage() {
@@ -55,7 +63,7 @@ export default function AnalyticsPage() {
         <div>
           <h1 className="page-title">Analytics</h1>
           <p className="page-subtitle">
-            Live stats from Sent inbox · opens, delivery, volume
+            Live stats from Sent inbox · opens, clicks, delivery, volume
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -81,12 +89,14 @@ export default function AnalyticsPage() {
         <p className="text-sm text-white/50">Loading analytics…</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <Stat label="Total logged" value={totals?.total ?? 0} />
             <Stat label="Sent / delivered" value={totals?.sent ?? 0} tone="ok" />
             <Stat label="Opened" value={totals?.opened ?? 0} tone="sky" />
+            <Stat label="Clicked" value={totals?.clicked ?? 0} tone="violet" />
             <Stat label="Failed" value={totals?.failed ?? 0} tone="bad" />
             <Stat label="Open rate" value={`${totals?.openRate ?? 0}%`} tone="sky" />
+            <Stat label="Click rate" value={`${totals?.clickRate ?? 0}%`} tone="violet" />
             <Stat label="Unique contacts" value={totals?.uniqueContacts ?? 0} />
           </div>
 
@@ -111,7 +121,8 @@ export default function AnalyticsPage() {
                       <div className="mb-1 flex justify-between text-xs text-white/50">
                         <span>{d.date}</span>
                         <span>
-                          {d.sent} sent · {d.opened} opened · {d.failed} failed
+                          {d.sent} sent · {d.opened} opened · {d.clicked ?? 0}{' '}
+                          clicked · {d.failed} failed
                         </span>
                       </div>
                       <div className="flex h-2 overflow-hidden rounded-full bg-white/10">
@@ -179,7 +190,7 @@ function Stat({
 }: {
   label: string;
   value: number | string;
-  tone?: 'ok' | 'bad' | 'sky';
+  tone?: 'ok' | 'bad' | 'sky' | 'violet';
 }) {
   const color =
     tone === 'ok'
@@ -188,7 +199,9 @@ function Stat({
         ? 'text-rose-300'
         : tone === 'sky'
           ? 'text-sky-300'
-          : 'text-white';
+          : tone === 'violet'
+            ? 'text-violet-300'
+            : 'text-white';
   return (
     <div className="card p-4 text-center">
       <div className={`text-2xl font-semibold ${color}`}>{value}</div>
