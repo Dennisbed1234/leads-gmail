@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/db/prisma';
-import { ensureSentEmailTable } from '@/lib/db/ensure-sent-email';
+import {
+  ensureSentEmailTable,
+  isSuppressedEmail,
+} from '@/lib/db/ensure-sent-email';
 import {
   isSmtpConfigured,
   personalize,
@@ -12,7 +15,12 @@ import {
   getSmtpConfig,
   type EmailAttachment,
 } from '@/lib/email/smtp';
-import { prepareTrackedHtml, getAppBaseUrl } from '@/lib/tracking';
+import {
+  prepareTrackedHtml,
+  getAppBaseUrl,
+  unsubscribeUrlFor,
+  classifySmtpFailure,
+} from '@/lib/tracking';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -96,12 +104,14 @@ async function logSent(data: {
   toName?: string;
   subject: string;
   bodySnippet?: string;
-  status: 'SENT' | 'DELIVERED' | 'OPENED' | 'FAILED';
+  status: 'SENT' | 'DELIVERED' | 'OPENED' | 'FAILED' | 'BOUNCED' | 'UNSUBSCRIBED';
   messageId?: string;
   error?: string;
   mode?: string;
   isHtml?: boolean;
   lastEvent?: string;
+  campaignId?: string;
+  bounceType?: string | null;
 }) {
   try {
     if (!tableReady) {
@@ -111,29 +121,39 @@ async function logSent(data: {
     const { fromName } = getSmtpConfig();
     const id = data.id || randomUUID();
     const now = new Date();
+    const accepted =
+      data.status === 'DELIVERED' ||
+      data.status === 'SENT' ||
+      data.status === 'OPENED';
 
     try {
-      await prisma.sentEmail.create({
-        data: {
-          id,
-          toEmail: data.toEmail,
-          toName: data.toName || null,
-          subject: data.subject,
-          bodySnippet: data.bodySnippet || null,
-          status: data.status,
-          messageId: data.messageId || null,
-          error: data.error || null,
-          mode: data.mode || null,
-          isHtml: data.isHtml !== false,
-          fromName: fromName || 'CryptoByt',
-          deliveredAt:
-            data.status === 'DELIVERED' || data.status === 'SENT' ? now : null,
-          openCount: 0,
-          lastEvent: data.lastEvent || data.status.toLowerCase(),
-        } as any,
-      });
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "SentEmail" (
+          "id", "toEmail", "toName", "subject", "bodySnippet", "status",
+          "messageId", "error", "mode", "isHtml", "fromName",
+          "deliveredAt", "openCount", "clickCount", "lastEvent",
+          "campaignId", "bouncedAt", "bounceType", "createdAt"
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,0,$13,$14,$15,$16,CURRENT_TIMESTAMP
+        )`,
+        id,
+        data.toEmail,
+        data.toName || null,
+        data.subject,
+        data.bodySnippet || null,
+        data.status,
+        data.messageId || null,
+        data.error || null,
+        data.mode || null,
+        data.isHtml !== false,
+        fromName || 'CryptoByt',
+        accepted ? now : null,
+        data.lastEvent || data.status.toLowerCase(),
+        data.campaignId || null,
+        data.status === 'BOUNCED' ? now : null,
+        data.bounceType || null
+      );
     } catch {
-      // Older client without new fields
       await prisma.sentEmail.create({
         data: {
           id,
@@ -180,6 +200,13 @@ export async function GET() {
     maxRecipients: MAX_RECIPIENTS,
     appUrl: getAppBaseUrl(),
     tracking: true,
+    features: [
+      'open',
+      'click',
+      'unsubscribe',
+      'bounce_classify',
+      'campaignId',
+    ],
   });
 }
 
@@ -218,10 +245,9 @@ export async function POST(request: Request) {
     );
     const statusFilter = body.status || 'NEW';
     const attachments = normalizeAttachments(body.attachments);
-    const unsubscribeUrl =
-      typeof body.unsubscribeUrl === 'string'
-        ? body.unsubscribeUrl.trim()
-        : undefined;
+    const campaignId =
+      String(body.campaignId || body.campaign || '').trim() ||
+      `camp_${Date.now().toString(36)}`;
 
     if (!subjectTemplate) {
       return NextResponse.json(
@@ -285,16 +311,30 @@ export async function POST(request: Request) {
       }
     }
 
+    // Drop suppressed addresses
+    const filtered: Recipient[] = [];
+    let skippedSuppressed = 0;
+    for (const r of recipients) {
+      if (await isSuppressedEmail(r.email)) {
+        skippedSuppressed += 1;
+        continue;
+      }
+      filtered.push(r);
+    }
+    recipients = filtered;
+
     if (dryRun) {
       return NextResponse.json({
         success: true,
         dryRun: true,
         mode,
+        campaignId,
         preferHtml,
         hasHtml: Boolean(htmlTemplate),
         hasText: Boolean(textTemplate),
         attachmentCount: attachments.length,
         wouldSend: recipients.length,
+        skippedSuppressed,
         limit,
         appUrl: getAppBaseUrl(),
         recipients: recipients.map((r) => ({
@@ -312,6 +352,7 @@ export async function POST(request: Request) {
 
     let sent = 0;
     let failed = 0;
+    let bounced = 0;
     const errors: string[] = [];
     const sentTo: string[] = [];
 
@@ -325,6 +366,7 @@ export async function POST(request: Request) {
       };
       const subject = personalize(subjectTemplate, vars);
       const trackId = randomUUID();
+      const unsubUrl = unsubscribeUrlFor(trackId);
 
       try {
         const personalizedHtml = htmlTemplate
@@ -334,7 +376,6 @@ export async function POST(request: Request) {
           ? personalize(textTemplate, vars)
           : undefined;
 
-        // Open tracking pixel (Inbox-Mailer style events via our own endpoint)
         const trackedHtml = personalizedHtml
           ? prepareTrackedHtml(personalizedHtml, trackId)
           : undefined;
@@ -350,13 +391,18 @@ export async function POST(request: Request) {
           (personalizedHtml ? undefined : personalizedText) ||
           undefined;
 
+        // Append plain-text unsubscribe if text-only
+        const textWithUnsub = text
+          ? `${text}\n\nUnsubscribe: ${unsubUrl}`
+          : undefined;
+
         const result = await sendOneEmail({
           to: r.email,
           subject,
           html: html || undefined,
-          text: text || undefined,
+          text: textWithUnsub || text || undefined,
           attachments,
-          unsubscribeUrl,
+          unsubscribeUrl: unsubUrl,
         });
 
         sent += 1;
@@ -372,7 +418,8 @@ export async function POST(request: Request) {
           messageId: result.messageId,
           mode,
           isHtml: preferHtml,
-          lastEvent: 'delivered',
+          lastEvent: 'accepted',
+          campaignId,
         });
 
         if (mode === 'leads') {
@@ -392,6 +439,8 @@ export async function POST(request: Request) {
       } catch (e: any) {
         failed += 1;
         const errMsg = e?.message || 'send failed';
+        const { bounceType, status } = classifySmtpFailure(errMsg);
+        if (status === 'BOUNCED') bounced += 1;
         errors.push(`${r.email}: ${errMsg}`);
 
         await logSent({
@@ -403,11 +452,13 @@ export async function POST(request: Request) {
             textTemplate ? personalize(textTemplate, vars) : undefined,
             htmlTemplate ? personalize(htmlTemplate, vars) : undefined
           ),
-          status: 'FAILED',
+          status,
           error: errMsg,
           mode,
           isHtml: preferHtml,
-          lastEvent: 'failed',
+          lastEvent: status === 'BOUNCED' ? 'bounced' : 'failed',
+          campaignId,
+          bounceType,
         });
 
         if (i < recipients.length - 1) {
@@ -419,21 +470,22 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       mode,
+      campaignId,
       preferHtml,
       hasHtml: Boolean(htmlTemplate),
       hasText: Boolean(textTemplate),
       attachmentCount: attachments.length,
       sent,
       failed,
+      bounced,
+      skippedSuppressed,
       total: recipients.length,
       limit,
       sentTo,
       errors: errors.slice(0, 20),
       appUrl: getAppBaseUrl(),
       note:
-        failed > 0
-          ? 'See errors[] and Sent inbox. Opens require HTML + APP_URL/NEXTAUTH_URL set.'
-          : 'Logged as DELIVERED. Opens update when recipient loads images.',
+        'smtpAccepted = provider accepted the message (not guaranteed inbox). Opens need HTML + APP_URL. Unsubscribes are tracked per message.',
     });
   } catch (error: any) {
     console.error('Campaign error:', error);
