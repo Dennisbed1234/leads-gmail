@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 
 /**
- * Creates the SentEmail table if missing and adds open/click-tracking columns.
+ * Creates the SentEmail table if missing and adds open/click/unsubscribe/bounce columns.
  */
 export async function ensureSentEmailTable(): Promise<{
   ok: boolean;
@@ -28,6 +28,10 @@ export async function ensureSentEmailTable(): Promise<{
         "openCount" INTEGER NOT NULL DEFAULT 0,
         "clickCount" INTEGER NOT NULL DEFAULT 0,
         "lastEvent" TEXT,
+        "campaignId" TEXT,
+        "unsubscribedAt" TIMESTAMP(3),
+        "bouncedAt" TIMESTAMP(3),
+        "bounceType" TEXT,
         CONSTRAINT "SentEmail_pkey" PRIMARY KEY ("id")
       )
     `);
@@ -48,6 +52,18 @@ export async function ensureSentEmailTable(): Promise<{
     await prisma.$executeRawUnsafe(
       `ALTER TABLE "SentEmail" ADD COLUMN IF NOT EXISTS "lastEvent" TEXT`
     );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "SentEmail" ADD COLUMN IF NOT EXISTS "campaignId" TEXT`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "SentEmail" ADD COLUMN IF NOT EXISTS "unsubscribedAt" TIMESTAMP(3)`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "SentEmail" ADD COLUMN IF NOT EXISTS "bouncedAt" TIMESTAMP(3)`
+    );
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "SentEmail" ADD COLUMN IF NOT EXISTS "bounceType" TEXT`
+    );
 
     await prisma.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS "SentEmail_toEmail_idx" ON "SentEmail"("toEmail")`
@@ -58,6 +74,9 @@ export async function ensureSentEmailTable(): Promise<{
     await prisma.$executeRawUnsafe(
       `CREATE INDEX IF NOT EXISTS "SentEmail_createdAt_idx" ON "SentEmail"("createdAt")`
     );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "SentEmail_campaignId_idx" ON "SentEmail"("campaignId")`
+    );
 
     await prisma.sentEmail.count();
 
@@ -66,5 +85,28 @@ export async function ensureSentEmailTable(): Promise<{
     const msg = e?.message || String(e);
     console.error('ensureSentEmailTable:', msg);
     return { ok: false, created: false, error: msg };
+  }
+}
+
+/** True if this address unsubscribed or hard-bounced before. */
+export async function isSuppressedEmail(email: string): Promise<boolean> {
+  const em = (email || '').toLowerCase().trim();
+  if (!em.includes('@')) return false;
+  try {
+    await ensureSentEmailTable();
+    const rows = await prisma.$queryRawUnsafe<{ c: number }[]>(
+      `SELECT COUNT(*)::int AS c FROM "SentEmail"
+       WHERE lower(trim("toEmail")) = $1
+         AND (
+           "unsubscribedAt" IS NOT NULL
+           OR upper("status") = 'UNSUBSCRIBED'
+           OR upper("status") = 'BOUNCED'
+           OR lower(COALESCE("bounceType",'')) = 'hard'
+         )`,
+      em
+    );
+    return Number(rows[0]?.c || 0) > 0;
+  } catch {
+    return false;
   }
 }
