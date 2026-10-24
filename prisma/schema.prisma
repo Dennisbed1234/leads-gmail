@@ -63,22 +63,27 @@ model SentEmail {
   toName      String?
   subject     String
   bodySnippet String?
-  status      String    @default("SENT") // SENT | DELIVERED | OPENED | FAILED
+  status      String    @default("SENT") // SENT | DELIVERED | OPENED | FAILED | BOUNCED | UNSUBSCRIBED
   messageId   String?
   error       String?
   mode        String?
   isHtml      Boolean   @default(true)
   fromName    String?
 
-  deliveredAt DateTime?
-  openedAt    DateTime?
-  openCount   Int       @default(0)
-  clickCount  Int       @default(0)
-  lastEvent   String?   // sent | delivered | opened | clicked | failed
+  deliveredAt     DateTime?
+  openedAt        DateTime?
+  openCount       Int       @default(0)
+  clickCount      Int       @default(0)
+  lastEvent       String?   // accepted | opened | clicked | failed | bounced | unsubscribed
+  campaignId      String?
+  unsubscribedAt  DateTime?
+  bouncedAt       DateTime?
+  bounceType      String?   // hard | soft
 
   createdAt   DateTime  @default(now())
 
   @@index([toEmail])
   @@index([status])
   @@index([createdAt])
+  @@index([campaignId])
 }
