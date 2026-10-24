@@ -54,11 +54,61 @@ export function injectClickTracking(html: string, emailId: string): string {
   );
 }
 
+/** Footer unsubscribe link (unique per message id). */
+export function injectUnsubscribeLink(html: string, emailId: string): string {
+  if (!html || !emailId) return html;
+  if (html.includes('/api/track/unsubscribe')) return html;
+
+  const base = getAppBaseUrl();
+  const href = `${base}/api/track/unsubscribe?id=${encodeURIComponent(emailId)}`;
+  const block = `
+<p style="margin:24px 0 0;font-size:11px;line-height:1.5;color:#6b7280;text-align:center;">
+  If you no longer want these emails,
+  <a href="${href}" style="color:#6b7280;text-decoration:underline;">unsubscribe</a>.
+</p>`;
+
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${block}\n</body>`);
+  }
+  if (/<\/html>/i.test(html)) {
+    return html.replace(/<\/html>/i, `${block}\n</html>`);
+  }
+  return `${html}${block}`;
+}
+
+export function unsubscribeUrlFor(emailId: string): string {
+  return `${getAppBaseUrl()}/api/track/unsubscribe?id=${encodeURIComponent(emailId)}`;
+}
+
 export function prepareTrackedHtml(html: string | undefined, emailId: string) {
   if (!html) return undefined;
   let out = injectOpenPixel(html, emailId);
   out = injectClickTracking(out, emailId);
+  out = injectUnsubscribeLink(out, emailId);
   return out;
+}
+
+/** Classify SMTP errors into soft bounce / hard bounce / other. */
+export function classifySmtpFailure(message: string): {
+  bounceType: 'hard' | 'soft' | null;
+  status: 'BOUNCED' | 'FAILED';
+} {
+  const m = String(message || '');
+  if (
+    /550|551|552|553|user unknown|mailbox unavailable|does not exist|no such user|invalid recipient|recipient rejected|address rejected/i.test(
+      m
+    )
+  ) {
+    return { bounceType: 'hard', status: 'BOUNCED' };
+  }
+  if (
+    /421|450|451|452|try again|temporarily|greylist|rate limit|too many|deferred/i.test(
+      m
+    )
+  ) {
+    return { bounceType: 'soft', status: 'FAILED' };
+  }
+  return { bounceType: null, status: 'FAILED' };
 }
 
 export const TRANSPARENT_GIF = Buffer.from(
