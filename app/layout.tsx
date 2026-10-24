@@ -3,9 +3,20 @@ import './globals.css';
 import AppShell from '@/components/layout/AppShell';
 
 export const metadata: Metadata = {
-  title: 'CryptoByt — Lead outreach',
-  description:
-    'Extract executives, verify emails, and run outreach campaigns with CryptoByt',
+  title: 'Private tool',
+  description: 'Authorized access only.',
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+      noarchive: true,
+      nosnippet: true,
+    },
+  },
 };
 
 export default function RootLayout({
